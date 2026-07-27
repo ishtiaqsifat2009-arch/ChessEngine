@@ -17,6 +17,52 @@ struct Piece {
   PieceColor color;
 };
 
+void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
+  board[endY][endX] = board[startY][startX];
+
+  board[startY][startX] = {PieceType::none, PieceColor::None};
+}
+
+bool validateMove(Piece board[8][8], int startX, int startY, int endX,
+                  int endY) {
+  // check piece type
+  // check movement pattern
+  // check if blocked
+  // check if enemy piece
+  // etc.
+
+  return true;
+}
+
+void printBoard(Piece board[8][8]) {
+
+  {
+    for (int y = 0; y < 8; y++) {
+      for (int x = 0; x < 8; x++) {
+        Piece piece = board[y][x];
+
+        if (piece.type == PieceType::none) {
+          std::cout << ". ";
+        } else if (piece.type == PieceType::pawns) {
+          std::cout << "P ";
+        } else if (piece.type == PieceType::rooks) {
+          std::cout << "R ";
+        } else if (piece.type == PieceType::horse) {
+          std::cout << "N ";
+        } else if (piece.type == PieceType::bishops) {
+          std::cout << "B ";
+        } else if (piece.type == PieceType::queen) {
+          std::cout << "Q ";
+        } else if (piece.type == PieceType::king) {
+          std::cout << "K ";
+        }
+      }
+
+      std::cout << "\n";
+    }
+  }
+}
+
 int main() {
 
   Piece board[8][8] = {{{PieceType::rooks, PieceColor::White},
@@ -91,44 +137,18 @@ int main() {
                         {PieceType::horse, PieceColor::Black},
                         {PieceType::rooks, PieceColor::Black}}};
 
-  for (size_t i = 0; i < 8; i++) {
-    std::cout << "\n";
+  printBoard(board);
 
-    for (size_t j = 0; j < 8; j++) {
+  while (true) {
+    int startX, startY;
+    int endX, endY;
 
-      Piece currentPiece = board[i][j];
+    std::cout << "Move piece: ";
+    std::cin >> startX >> startY >> endX >> endY;
 
-      switch (currentPiece.type) {
+    movePiece(board, startX, startY, endX, endY);
 
-      case PieceType::king:
-        std::cout << (currentPiece.color == PieceColor::White ? " K " : " k ");
-        break;
-
-      case PieceType::queen:
-        std::cout << (currentPiece.color == PieceColor::White ? " Q " : " q ");
-        break;
-
-      case PieceType::rooks:
-        std::cout << (currentPiece.color == PieceColor::White ? " R " : " r ");
-        break;
-
-      case PieceType::bishops:
-        std::cout << (currentPiece.color == PieceColor::White ? " B " : " b ");
-        break;
-
-      case PieceType::horse:
-        std::cout << (currentPiece.color == PieceColor::White ? " H " : " h ");
-        break;
-
-      case PieceType::pawns:
-        std::cout << (currentPiece.color == PieceColor::White ? " P " : " p ");
-        break;
-
-      case PieceType::none:
-        std::cout << " . ";
-        break;
-      }
-    }
+    printBoard(board);
   }
 
   return 0;
