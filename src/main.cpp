@@ -17,7 +17,15 @@ struct Piece {
   PieceColor color;
 };
 
+bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
+
 void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
+
+  if (!isInsideBoard(endX, endY)) {
+    std::cout << "Invalid position\n";
+    return;
+  }
+
   board[endY][endX] = board[startY][startX];
 
   board[startY][startX] = {PieceType::none, PieceColor::None};
@@ -25,13 +33,21 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
 
 bool validateMove(Piece board[8][8], int startX, int startY, int endX,
                   int endY) {
-  // check piece type
-  // check movement pattern
-  // check if blocked
-  // check if enemy piece
-  // etc.
+  Piece piece = board[startY][startX];
 
-  return true;
+  switch (piece.type) {
+  case PieceType::pawns:
+    return validatePawnMove(board, startX, startY, endX, endY);
+
+  case PieceType::rooks:
+    return validateRookMove(board, startX, startY, endX, endY);
+
+  case PieceType::horse:
+    return validateKnightMove(board, startX, startY, endX, endY);
+
+  default:
+    return false;
+  }
 }
 
 void printBoard(Piece board[8][8]) {
