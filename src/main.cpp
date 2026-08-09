@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <iostream>
 
 enum class PieceType {
@@ -31,141 +32,184 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
   board[startY][startX] = {PieceType::none, PieceColor::None};
 }
 
-bool validateMove(Piece board[8][8], int startX, int startY, int endX,
-                  int endY) {
-  Piece piece = board[startY][startX];
+// validate the piece Move
 
-  switch (piece.type) {
-  case PieceType::pawns:
-    return validatePawnMove(board, startX, startY, endX, endY);
+bool validateKnightMove(
+    // parameters
+    Piece board[8][8], int startX, int startY, int endX, int endY) {
 
-  case PieceType::rooks:
-    return validateRookMove(board, startX, startY, endX, endY);
-
-  case PieceType::horse:
-    return validateKnightMove(board, startX, startY, endX, endY);
-
-  default:
-    return false;
+  int xDifference = abs(endX - startX);
+  int yDifference = abs(endY - startY);
+  if (xDifference == 2 && yDifference == 1 ||
+      xDifference == 1 && yDifference == 2) {
+    return true;
   }
+
+  return false;
 }
 
-void printBoard(Piece board[8][8]) {
+// validate pawn movements
+bool validatePawnMove(
+    // parameters
+    Piece board[8][8], int startX, int startY, int endX, int endY) {
 
-  {
-    for (int y = 0; y < 8; y++) {
-      for (int x = 0; x < 8; x++) {
-        Piece piece = board[y][x];
+  int yDifference = (endY - startY);
+  if (yDifference == 1) {
+    return true;
+  }
+  return false;
+}
 
-        if (piece.type == PieceType::none) {
-          std::cout << ". ";
-        } else if (piece.type == PieceType::pawns) {
-          std::cout << "P ";
-        } else if (piece.type == PieceType::rooks) {
-          std::cout << "R ";
-        } else if (piece.type == PieceType::horse) {
-          std::cout << "N ";
-        } else if (piece.type == PieceType::bishops) {
-          std::cout << "B ";
-        } else if (piece.type == PieceType::queen) {
-          std::cout << "Q ";
-        } else if (piece.type == PieceType::king) {
-          std::cout << "K ";
+// validare the rooks
+bool validateRookMove(
+    // parameters
+    Piece board[8][8], int startX, int startY, int endX, int endY) {
+  // thing
+  int xDifference = abs(endX - startX);
+  int yDifference = abs(endY - startY);
+  // can only change 1 value at a time nothing else
+  if (yDifference == 0 && xDifference > 0 ||
+      yDifference > 0 && xDifference == 0) {
+    {
+      return true;
+    }
+    return false;
+
+    bool validateMove(Piece board[8][8], int startX, int startY, int endX,
+                      int endY) {
+      Piece piece = board[startY][startX];
+
+      switch (piece.type) {
+      case PieceType::pawns:
+        return validatePawnMove(board, startX, startY, endX, endY);
+
+      case PieceType::rooks:
+        return validateRookMove(board, startX, startY, endX, endY);
+
+      case PieceType::horse:
+        return validateKnightMove(board, startX, startY, endX, endY);
+
+      default:
+        return false;
+      }
+    }
+    // needa incorporate pointers and stuff to this
+    void printBoard(Piece board[8][8]) {
+      {
+
+        for (int y = 0; y < 8; y++) {
+          for (int x = 0; x < 8; x++) {
+            Piece piece = board[y][x];
+
+            if (piece.type == PieceType::none) {
+              std::cout << ". ";
+            } else if (piece.type == PieceType::pawns) {
+              std::cout << "P ";
+            } else if (piece.type == PieceType::rooks) {
+              std::cout << "R ";
+            } else if (piece.type == PieceType::horse) {
+              std::cout << "N ";
+            } else if (piece.type == PieceType::bishops) {
+              std::cout << "B ";
+            } else if (piece.type == PieceType::queen) {
+              std::cout << "Q ";
+            } else if (piece.type == PieceType::king) {
+              std::cout << "K ";
+            }
+          }
+
+          std::cout << "\n";
         }
       }
-
-      std::cout << "\n";
     }
-  }
-}
 
-int main() {
+    int main() {
 
-  Piece board[8][8] = {{{PieceType::rooks, PieceColor::White},
-                        {PieceType::horse, PieceColor::White},
-                        {PieceType::bishops, PieceColor::White},
-                        {PieceType::queen, PieceColor::White},
-                        {PieceType::king, PieceColor::White},
-                        {PieceType::bishops, PieceColor::White},
-                        {PieceType::horse, PieceColor::White},
-                        {PieceType::rooks, PieceColor::White}},
+      Piece board[8][8] = {{{PieceType::rooks, PieceColor::White},
+                            {PieceType::horse, PieceColor::White},
+                            {PieceType::bishops, PieceColor::White},
+                            {PieceType::queen, PieceColor::White},
+                            {PieceType::king, PieceColor::White},
+                            {PieceType::bishops, PieceColor::White},
+                            {PieceType::horse, PieceColor::White},
+                            {PieceType::rooks, PieceColor::White}},
 
-                       {{PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White},
-                        {PieceType::pawns, PieceColor::White}},
+                           {{PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White},
+                            {PieceType::pawns, PieceColor::White}},
 
-                       {{PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None}},
+                           {{PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None}},
 
-                       {{PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None}},
+                           {{PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None}},
 
-                       {{PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None}},
+                           {{PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None}},
 
-                       {{PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None},
-                        {PieceType::none, PieceColor::None}},
+                           {{PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None},
+                            {PieceType::none, PieceColor::None}},
 
-                       {{PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black},
-                        {PieceType::pawns, PieceColor::Black}},
+                           {{PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black},
+                            {PieceType::pawns, PieceColor::Black}},
 
-                       {{PieceType::rooks, PieceColor::Black},
-                        {PieceType::horse, PieceColor::Black},
-                        {PieceType::bishops, PieceColor::Black},
-                        {PieceType::queen, PieceColor::Black},
-                        {PieceType::king, PieceColor::Black},
-                        {PieceType::bishops, PieceColor::Black},
-                        {PieceType::horse, PieceColor::Black},
-                        {PieceType::rooks, PieceColor::Black}}};
+                           {{PieceType::rooks, PieceColor::Black},
+                            {PieceType::horse, PieceColor::Black},
+                            {PieceType::bishops, PieceColor::Black},
+                            {PieceType::queen, PieceColor::Black},
+                            {PieceType::king, PieceColor::Black},
+                            {PieceType::bishops, PieceColor::Black},
+                            {PieceType::horse, PieceColor::Black},
+                            {PieceType::rooks, PieceColor::Black}}};
 
-  printBoard(board);
+      printBoard(board);
 
-  while (true) {
-    int startX, startY;
-    int endX, endY;
+      while (true) {
+        int startX, startY;
+        int endX, endY;
 
-    std::cout << "Move piece: ";
-    std::cin >> startX >> startY >> endX >> endY;
+        std::cout << "Move piece: ";
+        std::cin >> startX >> startY >> endX >> endY;
 
-    movePiece(board, startX, startY, endX, endY);
+        movePiece(board, startX, startY, endX, endY);
 
-    printBoard(board);
-  }
+        printBoard(board);
+      }
 
-  return 0;
-}
+      return 0;
+    }
