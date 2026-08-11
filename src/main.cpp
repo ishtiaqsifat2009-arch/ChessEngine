@@ -93,6 +93,18 @@ bool validateQueenMove(Piece board[8][8], int startX, int startY, int endX,
   return false;
 }
 
+bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
+                      int endY) {
+  int xDifference = abs(endX - startX);
+  int yDifference = abs(endY - startY);
+  if (xDifference == 1 && yDifference == 1 ||
+      xDifference == 1 && yDifference == 0 ||
+      xDifference == 0 && yDifference == 1) {
+    return true;
+  }
+  return false;
+}
+
 bool validateMove(Piece board[8][8], int startX, int startY, int endX,
                   int endY) {
   Piece piece = board[startY][startX];
@@ -110,6 +122,8 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
     return validateBishopMove(board, startX, startY, endX, endY);
   case PieceType::queen:
     return validateQueenMove(board, startX, startY, endX, endY);
+  case PieceType::king:
+    return validateKingMove(board, startX, startY, endX, endY);
 
   default:
     return false;
