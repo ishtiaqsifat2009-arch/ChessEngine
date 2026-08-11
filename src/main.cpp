@@ -40,6 +40,13 @@ bool isTaken(Piece board[8][8], int endX, int endY) {
   }
   return false;
 }
+// Limits on what to take:: can only take black and none position\n
+bool canTake(Piece board[8][8], int endX, int endY) {
+  if (board[endY][endX].color == PieceColor::Black) {
+    return true;
+  }
+  return false;
+}
 
 bool validateKnightMove(
     // parameters
@@ -117,26 +124,41 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
                   int endY) {
   Piece piece = board[startY][startX];
 
+  bool movementValid;
+
   switch (piece.type) {
   case PieceType::pawns:
-    return validatePawnMove(board, startX, startY, endX, endY);
+    movementValid = validatePawnMove(board, startX, startY, endX, endY);
 
   case PieceType::rooks:
-    return validateRookMove(board, startX, startY, endX, endY);
+    movementValid = validateRookMove(board, startX, startY, endX, endY);
 
   case PieceType::horse:
-    return validateKnightMove(board, startX, startY, endX, endY);
+    movementValid = validateKnightMove(board, startX, startY, endX, endY);
   case PieceType::bishops:
-    return validateBishopMove(board, startX, startY, endX, endY);
+    movementValid = validateBishopMove(board, startX, startY, endX, endY);
   case PieceType::queen:
-    return validateQueenMove(board, startX, startY, endX, endY);
+    movementValid = validateQueenMove(board, startX, startY, endX, endY);
   case PieceType::king:
-    return validateKingMove(board, startX, startY, endX, endY);
+    movementValid = validateKingMove(board, startX, startY, endX, endY);
 
   default:
     return false;
   }
+  if (!movementValid) {
+    return false;
+  }
+  if (!isTaken(board, endX, endY)) {
+    return true;
+  }
+
+  if (canTake(board, endX, endY)) {
+    return true;
+  }
+
+  return false;
 }
+
 // needa incorporate pointers and stuff to this
 void printBoard(Piece board[8][8]) {
   {
