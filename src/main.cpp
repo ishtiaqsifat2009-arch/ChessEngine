@@ -33,6 +33,14 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
 }
 // validate the piece Move
 
+// Is taken on board/position\n
+bool isTaken(Piece board[8][8], int endX, int endY) {
+  if (board[endY][endX].type != PieceType::none) {
+    return true;
+  }
+  return false;
+}
+
 bool validateKnightMove(
     // parameters
     Piece board[8][8], int startX, int startY, int endX, int endY) {
