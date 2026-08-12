@@ -116,8 +116,11 @@ bool validateRookMove(Piece board[8][8], int startX, int startY, int endX,
   int xDifference = abs(endX - startX);
   int yDifference = abs(endY - startY);
 
-  if (yDifference == 0 && xDifference > 0 ||
-      yDifference > 0 && xDifference == 0) {
+  if (yDifference == 0 && xDifference > 0 &&
+          isPathClear(board, startX, startY, endX, endY) ||
+      yDifference > 0 && xDifference == 0 &&
+          isPathClear(board, startX, startY, endX, endY)) {
+
     return true;
   }
   return false;
@@ -127,7 +130,8 @@ bool validateBishopMove(Piece board[8][8], int startX, int startY, int endX,
                         int endY) {
   int xDifference = abs(endX - startX);
   int yDifference = abs(endY - startY);
-  if (xDifference == yDifference && xDifference > 0) {
+  if (xDifference == yDifference && xDifference > 0 &&
+      isPathClear(board, startX, startY, endX, endY)) {
     return true;
   }
   return false;
