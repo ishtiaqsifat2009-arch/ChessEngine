@@ -48,6 +48,42 @@ bool canTake(Piece board[8][8], int endX, int endY) {
   return false;
 }
 
+// make an obsstacle check so check everything between 2 places to see if i can
+// move there
+bool isPathClear(Piece board[8][8], int startX, int startY, int endX,
+                 int endY) {
+  int xDirection = 0;
+  int yDirection = 0;
+
+  int xDifference = endX - startX;
+  int yDifference = endY - startY;
+
+  if (xDifference > 0) {
+    xDirection = 1;
+  } else if (xDifference < 0) {
+    xDirection = -1;
+  }
+  if (yDifference > 0) {
+    yDirection = 1;
+  } else if (yDifference < 0) {
+    yDirection = -1;
+  }
+
+  for (int x = startX + xDirection, y = startY + yDirection;
+       x != endX || y != endY; x += xDirection, y += yDirection) {
+
+    // now for each square check it its taken.
+    // if yes then stop loop
+    // if not then continue loop until destination reached
+    //  if path clear then at end return true
+    if (isTaken(board, x, y)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool validateKnightMove(
     // parameters
     Piece board[8][8], int startX, int startY, int endX, int endY) {
@@ -145,6 +181,8 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
   default:
     return false;
   }
+
+  // forward with it
   if (!movementValid) {
     return false;
   }
