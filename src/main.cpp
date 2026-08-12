@@ -105,8 +105,10 @@ bool validatePawnMove(
 
   int yDifference = (endY - startY);
   if (yDifference == 1) {
+    std::cout << "Piece type reached validateMove\n";
     return true;
   }
+  std::cout << "Pawn validator reached\n";
   return false;
 }
 
@@ -169,18 +171,24 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
   switch (piece.type) {
   case PieceType::pawns:
     movementValid = validatePawnMove(board, startX, startY, endX, endY);
+    break;
 
   case PieceType::rooks:
     movementValid = validateRookMove(board, startX, startY, endX, endY);
+    break;
 
   case PieceType::horse:
     movementValid = validateKnightMove(board, startX, startY, endX, endY);
+    break;
   case PieceType::bishops:
     movementValid = validateBishopMove(board, startX, startY, endX, endY);
+    break;
   case PieceType::queen:
     movementValid = validateQueenMove(board, startX, startY, endX, endY);
+    break;
   case PieceType::king:
     movementValid = validateKingMove(board, startX, startY, endX, endY);
+    break;
 
   default:
     return false;
