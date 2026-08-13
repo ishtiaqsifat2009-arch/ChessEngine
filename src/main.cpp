@@ -107,14 +107,14 @@ bool validateKnightMove(
 // validate pawn movements
 bool validatePawnMove(
     // parameters
-    Piece board[8][8], int startX, int startY, int endX, int endY) {
+    Piece board[8][8], int startX, int startY, int endX, int endY,
+    PieceColor currentTurn) {
 
   int yDifference = (endY - startY);
-  if (yDifference == 1) {
-    std::cout << "Piece type reached validateMove\n";
+  if (currentTurn == PieceColor::White && yDifference == 1 ||
+      currentTurn == PieceColor::Black && yDifference == -1) {
     return true;
   }
-  std::cout << "Pawn validator reached\n";
   return false;
 }
 
@@ -185,7 +185,8 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
 
   switch (piece.type) {
   case PieceType::pawns:
-    movementValid = validatePawnMove(board, startX, startY, endX, endY);
+    movementValid =
+        validatePawnMove(board, startX, startY, endX, endY, currentTurn);
     break;
 
   case PieceType::rooks:
