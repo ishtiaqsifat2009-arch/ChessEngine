@@ -31,6 +31,10 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
 
   board[startY][startX] = {PieceType::none, PieceColor::None};
 }
+
+// make the turn system
+//
+
 // validate the piece Move
 
 // Is taken on board/position\n
@@ -41,11 +45,13 @@ bool isTaken(Piece board[8][8], int endX, int endY) {
   return false;
 }
 // Limits on what to take:: can only take black and none position\n
-bool canTake(Piece board[8][8], int endX, int endY) {
-  if (board[endY][endX].color == PieceColor::Black) {
-    return true;
-  }
-  return false;
+//
+//
+bool canTake(Piece board[8][8], int endX, int endY, PieceColor currentTurn) {
+  PieceColor enemyColor = (currentTurn == PieceColor::White)
+                              ? PieceColor::Black
+                              : PieceColor::White;
+  return board[endY][endX].color == enemyColor;
 }
 
 // make an obsstacle check so check everything between 2 places to see if i can
@@ -161,10 +167,19 @@ bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
   }
   return false;
 }
-
+// make turn system
+//
+PieceColor currentTurn = PieceColor::White;
 bool validateMove(Piece board[8][8], int startX, int startY, int endX,
                   int endY) {
   Piece piece = board[startY][startX];
+
+  // turn system before the switch statements
+  //
+  if (piece.color != currentTurn) {
+    std::cout << "Its not your turn\n";
+    return false;
+  }
 
   bool movementValid;
 
@@ -202,7 +217,7 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
     return true;
   }
 
-  if (canTake(board, endX, endY)) {
+  if (canTake(board, endX, endY, currentTurn)) {
     return true;
   }
 
@@ -324,6 +339,8 @@ int main() {
 
     if (validateMove(board, startX, startY, endX, endY)) {
       movePiece(board, startX, startY, endX, endY);
+      currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
+                                                       : PieceColor::White;
     } else {
       std::cout << "Invalid move\n";
     }
