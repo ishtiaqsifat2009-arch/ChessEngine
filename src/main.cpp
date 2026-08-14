@@ -105,19 +105,42 @@ bool validateKnightMove(
 }
 
 // validate pawn movements
-bool validatePawnMove(
-    // parameters
-    Piece board[8][8], int startX, int startY, int endX, int endY,
-    PieceColor currentTurn) {
-
-  int yDifference = (endY - startY);
-  if (currentTurn == PieceColor::White && yDifference == 1 ||
-      currentTurn == PieceColor::Black && yDifference == -1) {
-    return true;
+bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
+                      int endY, PieceColor currentTurn) {
+  int xDiff = endX - startX;
+  int yDiff = endY - startY;
+  // white pawn rules
+  if (currentTurn == PieceColor::White) {
+    if (xDiff == 0 && yDiff == 1) {
+      return !isTaken(board, endX, endY);
+    }
+    if (xDiff == 0 && yDiff == 2 && startY == 1) {
+      bool squareInFrontEmpty = !isTaken(board, startX, startY + 1);
+      bool destinationEmpty = !isTaken(board, endX, endY);
+      return squareInFrontEmpty && destinationEmpty;
+    }
+    if ((xDiff == 1 || xDiff == -1) && yDiff == 1) {
+      return canTake(board, endX, endY, currentTurn);
+    }
   }
+
+  // Black Pawn rules
+  if (currentTurn == PieceColor::Black) {
+    if (xDiff == 0 && yDiff == -1) {
+      return !isTaken(board, endX, endY);
+    }
+    if (xDiff == 0 && yDiff == -2 && startY == 6) {
+      bool squareInFrontEmpty = !isTaken(board, startX, startY - 1);
+      bool destinationEmpty = !isTaken(board, endX, endY);
+      return squareInFrontEmpty && destinationEmpty;
+    }
+    if ((xDiff == 1 || xDiff == -1) && yDiff == -1) {
+      return canTake(board, endX, endY, currentTurn);
+    }
+  }
+
   return false;
 }
-
 // validare the rooks
 bool validateRookMove(Piece board[8][8], int startX, int startY, int endX,
                       int endY) {
