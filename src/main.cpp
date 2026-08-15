@@ -190,6 +190,96 @@ bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
   }
   return false;
 }
+
+// find the king
+//
+struct Position {
+  int x;
+  int y;
+};
+Position findKing(Piece board[8][8], PieceColor color) {
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      if (board[y][x].type == PieceType::king && board[y][x].color == color) {
+        return {x, y};
+      }
+    }
+  }
+  return {-1, -1};
+}
+
+bool isSquareAttacked(Piece board[8][8], int x, int y,
+                      PieceColor attackerColor) {
+  for (int py = 0; py < 8; py++) {
+    for (int px = 0; px < 8; px++) {
+      Piece piece = board[py][px];
+      if (piece.color != attackerColor)
+        continue;
+
+      int xDiff = x - px;
+      int yDiff = y - py;
+
+      switch (piece.type) {
+      case PieceType::pawns: {
+        // pawns attack diagonally only +  direction depends on color
+        int direction = (attackerColor == PieceColor::White) ? 1 : -1;
+        if (yDiff == direction && (xDiff == 1 || xDiff == -1))
+          return true;
+        break;
+      }
+      case PieceType::horse:
+        if (validateKnightMove(board, px, py, x, y))
+          return true;
+        break;
+      case PieceType::bishops:
+        if (validateBishopMove(board, px, py, x, y))
+          return true;
+        break;
+      case PieceType::rooks:
+        if (validateRookMove(board, px, py, x, y))
+          return true;
+        break;
+      case PieceType::queen:
+        if (validateQueenMove(board, px, py, x, y))
+          return true;
+        break;
+      case PieceType::king:
+        if (abs(xDiff) <= 1 && abs(yDiff) <= 1)
+          return true;
+        break;
+      default:
+        break;
+      }
+    }
+  }
+  return false;
+}
+
+bool isKingInCheck(Piece board[8][8], PieceColor color) {
+  Position kingPos = findKing(board, color);
+  PieceColor enemyColor =
+      (color == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+  return isSquareAttacked(board, kingPos.x, kingPos.y, enemyColor);
+}
+
+bool wouldLeaveKingInCheck(Piece board[8][8], int startX, int startY, int endX,
+                           int endY, PieceColor movingColor) {
+  //  copy board
+  Piece tempBoard[8][8];
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      tempBoard[y][x] = board[y][x];
+    }
+  }
+
+  //  simulate the move on the copy only
+  tempBoard[endY][endX] = tempBoard[startY][startX];
+  tempBoard[startY][startX] = {PieceType::none, PieceColor::None};
+
+  //  check if that leaves the king in check
+  return isKingInCheck(tempBoard, movingColor);
+}
+
 // make turn system
 //
 PieceColor currentTurn = PieceColor::White;
@@ -362,9 +452,15 @@ int main() {
     std::cin >> startX >> startY >> endX >> endY;
 
     if (validateMove(board, startX, startY, endX, endY)) {
-      movePiece(board, startX, startY, endX, endY);
-      currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
-                                                       : PieceColor::White;
+      if (wouldLeaveKingInCheck(board, startX, startY, endX, endY,
+                                currentTurn)) {
+        std::cout << "Illegal move - King in check\n";
+      } else {
+        movePiece(board, startX, startY, endX,
+                  endY); // only now touch the real board
+        currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
+                                                         : PieceColor::White;
+      }
     } else {
       std::cout << "Invalid move\n";
     }
