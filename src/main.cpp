@@ -18,6 +18,12 @@ struct Piece {
   PieceColor color;
 };
 
+struct Position {
+  int x;
+  int y;
+};
+Position enPassantTarget = {-1, -1};
+
 bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
 
 void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
@@ -193,10 +199,7 @@ bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
 
 // find the king
 //
-struct Position {
-  int x;
-  int y;
-};
+
 Position findKing(Piece board[8][8], PieceColor color) {
   for (int y = 0; y < 8; y++) {
     for (int x = 0; x < 8; x++) {
