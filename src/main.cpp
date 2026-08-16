@@ -129,6 +129,17 @@ bool validateKnightMove(
   return false;
 }
 
+bool PawnPromotion(Piece board[8][8], int endX, int endY) {
+
+  if (board[endY][endX].type == PieceType::pawns) {
+    if (endY == 0 || endY == 7) {
+      board[endY][endX].type = PieceType::queen;
+      return true;
+    }
+  }
+  return false;
+}
+
 // validate pawn movements
 bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
                       int endY, PieceColor currentTurn) {
@@ -486,6 +497,8 @@ int main() {
       } else {
         movePiece(board, startX, startY, endX,
                   endY); // only now touch the real board
+        PawnPromotion(board, endX, endY);
+
         currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
                                                          : PieceColor::White;
       }
