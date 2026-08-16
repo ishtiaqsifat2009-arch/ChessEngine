@@ -27,15 +27,34 @@ Position enPassantTarget = {-1, -1};
 bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
 
 void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
-
   if (!isInsideBoard(endX, endY)) {
     std::cout << "Invalid position\n";
     return;
   }
 
-  board[endY][endX] = board[startY][startX];
+  Piece movingPiece = board[startY][startX];
 
+  // is this move actually an en passant capture?
+  bool isEnPassantCapture =
+      (movingPiece.type == PieceType::pawns && endX == enPassantTarget.x &&
+       endY == enPassantTarget.y);
+
+  if (isEnPassantCapture) {
+    // captured pawn isnt on (endX, endY):it's on the row the
+    // capturing pawn started from, but the column it's moving to
+    board[startY][endX] = {PieceType::none, PieceColor::None};
+  }
+
+  board[endY][endX] = movingPiece;
   board[startY][startX] = {PieceType::none, PieceColor::None};
+
+  // set up (or cancel) en passant for the opponent's NEXT move only
+  if (movingPiece.type == PieceType::pawns && abs(endY - startY) == 2) {
+    enPassantTarget = {startX,
+                       (startY + endY) / 2}; // square that got skipped over
+  } else {
+    enPassantTarget = {-1, -1};
+  }
 }
 
 // make the turn system
@@ -126,7 +145,10 @@ bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
       return squareInFrontEmpty && destinationEmpty;
     }
     if ((xDiff == 1 || xDiff == -1) && yDiff == 1) {
-      return canTake(board, endX, endY, currentTurn);
+      if (canTake(board, endX, endY, currentTurn))
+        return true;
+      if (endX == enPassantTarget.x && endY == enPassantTarget.y)
+        return true;
     }
   }
 
@@ -141,8 +163,11 @@ bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
       return squareInFrontEmpty && destinationEmpty;
     }
     if ((xDiff == 1 || xDiff == -1) && yDiff == -1) {
-      return canTake(board, endX, endY, currentTurn);
     }
+    if (canTake(board, endX, endY, currentTurn))
+      return true;
+    if (endX == enPassantTarget.x && endY == enPassantTarget.y)
+      return true;
   }
 
   return false;
