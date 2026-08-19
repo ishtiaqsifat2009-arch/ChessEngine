@@ -24,6 +24,14 @@ struct Position {
 };
 Position enPassantTarget = {-1, -1};
 
+// castling requires knowing if the king or the relevant rook has EVER moved
+bool whiteKingMoved = false;
+bool blackKingMoved = false;
+bool whiteRookAMoved = false; // a-file rook (queenside)
+bool whiteRookHMoved = false; // h-file rook (kingside)
+bool blackRookAMoved = false;
+bool blackRookHMoved = false;
+
 bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
 
 void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
@@ -45,8 +53,45 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
     board[startY][endX] = {PieceType::none, PieceColor::None};
   }
 
+  // is this move a castle? (king moving 2 squares sideways)
+  bool isCastling =
+      (movingPiece.type == PieceType::king && abs(endX - startX) == 2);
+
   board[endY][endX] = movingPiece;
   board[startY][startX] = {PieceType::none, PieceColor::None};
+
+  if (isCastling) {
+    if (endX == 6) {
+      // kingside: rook jumps from h-file (x=7) to f-file (x=5)
+      board[endY][5] = board[endY][7];
+      board[endY][7] = {PieceType::none, PieceColor::None};
+    } else if (endX == 2) {
+      // queenside: rook jumps from a-file (x=0) to d-file (x=3)
+      board[endY][3] = board[endY][0];
+      board[endY][0] = {PieceType::none, PieceColor::None};
+    }
+  }
+
+  // remember that this king/rook has now moved (disables future castling)
+  if (movingPiece.type == PieceType::king) {
+    if (movingPiece.color == PieceColor::White)
+      whiteKingMoved = true;
+    else
+      blackKingMoved = true;
+  }
+  if (movingPiece.type == PieceType::rooks) {
+    if (movingPiece.color == PieceColor::White) {
+      if (startX == 0 && startY == 0)
+        whiteRookAMoved = true;
+      if (startX == 7 && startY == 0)
+        whiteRookHMoved = true;
+    } else {
+      if (startX == 0 && startY == 7)
+        blackRookAMoved = true;
+      if (startX == 7 && startY == 7)
+        blackRookHMoved = true;
+    }
+  }
 
   // set up (or cancel) en passant for the opponent's NEXT move only
   if (movingPiece.type == PieceType::pawns && abs(endY - startY) == 2) {
@@ -174,11 +219,11 @@ bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
       return squareInFrontEmpty && destinationEmpty;
     }
     if ((xDiff == 1 || xDiff == -1) && yDiff == -1) {
+      if (canTake(board, endX, endY, currentTurn))
+        return true;
+      if (endX == enPassantTarget.x && endY == enPassantTarget.y)
+        return true;
     }
-    if (canTake(board, endX, endY, currentTurn))
-      return true;
-    if (endX == enPassantTarget.x && endY == enPassantTarget.y)
-      return true;
   }
 
   return false;
@@ -230,6 +275,9 @@ bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
       xDifference == 0 && yDifference == 1) {
     return true;
   }
+  if (xDifference == 2 && yDifference == 0) {
+  }
+
   return false;
 }
 
@@ -301,6 +349,77 @@ bool isKingInCheck(Piece board[8][8], PieceColor color) {
   return isSquareAttacked(board, kingPos.x, kingPos.y, enemyColor);
 }
 
+bool validateCastling(Piece board[8][8], int startX, int startY, int endX,
+                      int endY, PieceColor currentTurn) {
+  int homeRow = (currentTurn == PieceColor::White) ? 0 : 7;
+
+  // king must still be on its home square, castling stays on that row,
+  // and it must be a 2-square horizontal hop
+  if (startY != homeRow || endY != homeRow || startX != 4)
+    return false;
+  if (abs(endX - startX) != 2)
+    return false;
+
+  bool kingMoved =
+      (currentTurn == PieceColor::White) ? whiteKingMoved : blackKingMoved;
+  if (kingMoved)
+    return false;
+
+  // can't castle out of check
+  if (isKingInCheck(board, currentTurn))
+    return false;
+
+  PieceColor enemyColor = (currentTurn == PieceColor::White)
+                              ? PieceColor::Black
+                              : PieceColor::White;
+
+  if (endX == 6) {
+    // kingside: rook must be on h-file and unmoved, f/g squares empty
+    bool rookMoved =
+        (currentTurn == PieceColor::White) ? whiteRookHMoved : blackRookHMoved;
+    if (rookMoved)
+      return false;
+    if (board[homeRow][7].type != PieceType::rooks ||
+        board[homeRow][7].color != currentTurn)
+      return false;
+    if (isTaken(board, 5, homeRow) || isTaken(board, 6, homeRow))
+      return false;
+
+    // king can't pass through OR land on an attacked square
+    if (isSquareAttacked(board, 4, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 5, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 6, homeRow, enemyColor))
+      return false;
+    return true;
+  }
+
+  if (endX == 2) {
+    // queenside: rook must be on a-file and unmoved, b/c/d squares empty
+    bool rookMoved =
+        (currentTurn == PieceColor::White) ? whiteRookAMoved : blackRookAMoved;
+    if (rookMoved)
+      return false;
+    if (board[homeRow][0].type != PieceType::rooks ||
+        board[homeRow][0].color != currentTurn)
+      return false;
+    if (isTaken(board, 1, homeRow) || isTaken(board, 2, homeRow) ||
+        isTaken(board, 3, homeRow))
+      return false;
+
+    if (isSquareAttacked(board, 4, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 3, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 2, homeRow, enemyColor))
+      return false;
+    return true;
+  }
+
+  return false;
+}
+
 bool wouldLeaveKingInCheck(Piece board[8][8], int startX, int startY, int endX,
                            int endY, PieceColor movingColor) {
   //  copy board
@@ -355,7 +474,9 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
     movementValid = validateQueenMove(board, startX, startY, endX, endY);
     break;
   case PieceType::king:
-    movementValid = validateKingMove(board, startX, startY, endX, endY);
+    movementValid =
+        validateKingMove(board, startX, startY, endX, endY) ||
+        validateCastling(board, startX, startY, endX, endY, currentTurn);
     break;
 
   default:
