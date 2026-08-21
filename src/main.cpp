@@ -179,8 +179,23 @@ bool PawnPromotion(Piece board[8][8], int endX, int endY) {
 
   if (board[endY][endX].type == PieceType::pawns) {
     if (endY == 0 || endY == 7) {
-      board[endY][endX].type = PieceType::queen;
-      return true;
+        std::string choice;
+      std::cout<<"What Piece do you want instead?"<<std::endl;
+      if (choice == "Knight"||"Horse") {
+      board[endY][endX].type = PieceType::horse;
+
+      }else if (choice=="rook"||"Rook") {
+          board[endY][endX].type = PieceType::rooks;
+
+      }else if (choice=="Bishop"||"bishop") {
+          board[endY][endX].type = PieceType::bishops;
+
+      }else if (choice=="Queen"||"queen") {
+          board[endY][endX].type = PieceType::queen;
+          return true;
+      }
+
+
     }
   }
   return false;
