@@ -1,10 +1,6 @@
-#include <cctype>
 #include <cstdlib>
-#include <ctime>
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <vector>
 
 enum class PieceType {
   none,
@@ -41,7 +37,7 @@ bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
 
 void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
   if (!isInsideBoard(endX, endY)) {
-    std::cerr << "Invalid position\n";
+    std::cout << "Invalid position\n";
     return;
   }
 
@@ -181,16 +177,18 @@ bool PawnPromotion(Piece board[8][8], int endX, int endY) {
     if (endY == 0 || endY == 7) {
         std::string choice;
       std::cout<<"What Piece do you want instead?"<<std::endl;
-      if (choice == "Knight"||"Horse") {
+      std::cin>>choice;
+
+      if (choice == "Knight"||choice=="Horse") {
       board[endY][endX].type = PieceType::horse;
 
-      }else if (choice=="rook"||"Rook") {
+      }else if (choice=="rook"||choice=="Rook") {
           board[endY][endX].type = PieceType::rooks;
 
-      }else if (choice=="Bishop"||"bishop") {
+      }else if (choice=="Bishop"||choice=="bishop") {
           board[endY][endX].type = PieceType::bishops;
 
-      }else if (choice=="Queen"||"queen") {
+      }else if (choice=="Queen"||choice=="queen") {
           board[endY][endX].type = PieceType::queen;
           return true;
       }
@@ -444,7 +442,7 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
   // turn system before the switch statements
   //
   if (piece.color != currentTurn) {
-    std::cerr << "Its not your turn\n";
+    std::cout << "Its not your turn\n";
     return false;
   }
 
@@ -579,179 +577,37 @@ void setupStartPosition(Piece board[8][8]) {
       board[y][x] = startBoard[y][x];
 }
 
-// resets every piece of game state — needed on "ucinewgame"/"position"
-void resetGameState() {
-  currentTurn = PieceColor::White;
-  enPassantTarget = {-1, -1};
-  whiteKingMoved = blackKingMoved = false;
-  whiteRookAMoved = whiteRookHMoved = false;
-  blackRookAMoved = blackRookHMoved = false;
-}
+int main() {
 
-// ---- UCI helpers ----
-
-// "e2" -> {x=4, y=1}.  Files a-h -> x 0-7, ranks 1-8 -> y 0-7 (matches your board layout)
-Position squareToCoords(const std::string &sq) {
-  int x = sq[0] - 'a';
-  int y = sq[1] - '1';
-  return {x, y};
-}
-
-// {x=4, y=1} -> "e2"
-std::string coordsToSquare(int x, int y) {
-  std::string s;
-  s += char('a' + x);
-  s += char('1' + y);
-  return s;
-}
-
-struct Move {
-  int startX, startY, endX, endY;
-};
-
-// walks every square, finds this color's pieces, and collects every move
-// that (a) passes normal piece-movement rules and (b) doesn't leave the
-// king in check. Reuses validateMove + wouldLeaveKingInCheck as-is.
-std::vector<Move> generateLegalMoves(Piece board[8][8], PieceColor color) {
-  std::vector<Move> moves;
-  for (int sy = 0; sy < 8; sy++) {
-    for (int sx = 0; sx < 8; sx++) {
-      if (board[sy][sx].color != color) continue;
-      for (int ey = 0; ey < 8; ey++) {
-        for (int ex = 0; ex < 8; ex++) {
-          if (sx == ex && sy == ey) continue;
-          if (validateMove(board, sx, sy, ex, ey) &&
-              !wouldLeaveKingInCheck(board, sx, sy, ex, ey, color)) {
-            moves.push_back({sx, sy, ex, ey});
-          }
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-void applyMove(Piece board[8][8], const Move &m) {
-  movePiece(board, m.startX, m.startY, m.endX, m.endY);
-  PawnPromotion(board, m.endX, m.endY); // auto-queen; underpromotion not supported yet
-  currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
-}
-
-// applies a "position" command's move list, e.g. "e2e4 e7e5 g1f3".
-// promotion letter (5th char, e.g. "e7e8q") is accepted but ignored -
-// PawnPromotion always queens, matching applyMove above.
-void applyUciMoveList(Piece board[8][8], std::istringstream &iss) {
-  std::string moveStr;
-  while (iss >> moveStr) {
-    Position from = squareToCoords(moveStr.substr(0, 2));
-    Position to = squareToCoords(moveStr.substr(2, 2));
-    applyMove(board, {from.x, from.y, to.x, to.y});
-  }
-}
-
-void handlePositionCommand(Piece board[8][8], std::istringstream &iss) {
-  std::string token;
-  iss >> token; // "startpos" or "fen"
-
-  resetGameState();
-
-  if (token == "startpos") {
-    setupStartPosition(board);
-  } else if (token == "fen") {
-    // basic FEN support: piece placement + active color + castling rights + en passant
-    std::string placement, active, castling, ep;
-    iss >> placement >> active >> castling >> ep;
-
-    for (int y = 0; y < 8; y++)
-      for (int x = 0; x < 8; x++)
-        board[y][x] = {PieceType::none, PieceColor::None};
-
-    int x = 0, y = 7; // FEN starts at rank 8 (our y=7), file a
-    for (char c : placement) {
-      if (c == '/') { y--; x = 0; continue; }
-      if (isdigit(c)) { x += c - '0'; continue; }
-      PieceColor color = isupper(c) ? PieceColor::White : PieceColor::Black;
-      char lc = tolower(c);
-      PieceType type = PieceType::none;
-      if (lc == 'k') type = PieceType::king;
-      else if (lc == 'q') type = PieceType::queen;
-      else if (lc == 'r') type = PieceType::rooks;
-      else if (lc == 'b') type = PieceType::bishops;
-      else if (lc == 'n') type = PieceType::horse;
-      else if (lc == 'p') type = PieceType::pawns;
-      board[y][x] = {type, color};
-      x++;
-    }
-
-    currentTurn = (active == "w") ? PieceColor::White : PieceColor::Black;
-
-    bool hasWK = castling.find('K') != std::string::npos;
-    bool hasWQ = castling.find('Q') != std::string::npos;
-    bool hasBK = castling.find('k') != std::string::npos;
-    bool hasBQ = castling.find('q') != std::string::npos;
-    whiteRookHMoved = !hasWK;
-    whiteRookAMoved = !hasWQ;
-    blackRookHMoved = !hasBK;
-    blackRookAMoved = !hasBQ;
-    whiteKingMoved = !(hasWK || hasWQ);
-    blackKingMoved = !(hasBK || hasBQ);
-
-    if (ep != "-") {
-      enPassantTarget = squareToCoords(ep);
-    }
-  }
-
-  std::string movesToken;
-  if (iss >> movesToken && movesToken == "moves") {
-    applyUciMoveList(board, iss);
-  }
-}
-
-void uciLoop() {
   Piece board[8][8];
   setupStartPosition(board);
-  resetGameState();
-  srand((unsigned)time(nullptr));
 
-  std::string line;
-  while (std::getline(std::cin, line)) {
-    std::istringstream iss(line);
-    std::string command;
-    iss >> command;
+  printBoard(board);
 
-    if (command == "uci") {
-      std::cout << "id name YourChessEngine\n";
-      std::cout << "id author You\n";
-      std::cout << "uciok\n";
-      std::cout.flush();
-    } else if (command == "isready") {
-      std::cout << "readyok\n";
-      std::cout.flush();
-    } else if (command == "ucinewgame") {
-      setupStartPosition(board);
-      resetGameState();
-    } else if (command == "position") {
-      handlePositionCommand(board, iss);
-    } else if (command == "go") {
-      std::vector<Move> legalMoves = generateLegalMoves(board, currentTurn);
-      if (legalMoves.empty()) {
-        std::cout << "bestmove 0000\n"; // no legal moves: checkmate or stalemate
+  while (true) {
+    int startX, startY;
+    int endX, endY;
+
+    std::cout << "Move piece: ";
+    std::cin >> startX >> startY >> endX >> endY;
+
+    if (validateMove(board, startX, startY, endX, endY)) {
+      if (wouldLeaveKingInCheck(board, startX, startY, endX, endY,
+                                currentTurn)) {
+        std::cout << "Illegal move - King in check\n";
       } else {
-        Move chosen = legalMoves[rand() % legalMoves.size()];
-        std::string moveStr = coordsToSquare(chosen.startX, chosen.startY) +
-                              coordsToSquare(chosen.endX, chosen.endY);
-        applyMove(board, chosen);
-        std::cout << "bestmove " << moveStr << "\n";
-      }
-      std::cout.flush();
-    } else if (command == "quit") {
-      break;
-    }
-    // unrecognized commands are silently ignored, per UCI convention
-  }
-}
+        movePiece(board, startX, startY, endX,
+                  endY); // only now touch the real board
+        PawnPromotion(board, endX, endY);
 
-int main() {
-  uciLoop();
+        currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
+                                                         : PieceColor::White;
+      }
+    } else {
+      std::cout << "Invalid move\n";
+    }
+    printBoard(board);
+  }
+
   return 0;
 }
