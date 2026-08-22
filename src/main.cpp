@@ -1,6 +1,8 @@
+
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
 
 enum class PieceType {
   none,
@@ -24,6 +26,23 @@ struct Position {
   int y;
 };
 Position enPassantTarget = {-1, -1};
+
+//struct move for my Perfting
+//
+struct Move{
+    int startX;
+    int startY;
+    int endX;
+    int endY;
+
+};
+
+//Generate Legal Move;
+
+
+
+
+
 
 // castling requires knowing if the king or the relevant rook has EVER moved
 bool whiteKingMoved = false;
@@ -491,6 +510,39 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
   return false;
 }
 
+void GenerateLegalMoves(Piece board[8][8], std::vector<Move>& move_list) {
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+
+            // is this one of our pieces
+            if (board[y][x].color == currentTurn &&
+                board[y][x].type != PieceType::none) {
+
+                // try every possible place
+                for (int endY = 0; endY < 8; endY++) {
+                    for (int endX = 0; endX < 8; endX++) {
+
+                        // this move legal?
+                        if (validateMove(board, x, y, endX, endY)) {
+                            //make  a move wth coordinates
+                            Move move;
+                            move.startX = x;
+                            move.startY = y;
+                            move.endX = endX;
+                            move.endY = endY;
+
+                            // Store the legal move
+                            move_list.push_back(move);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
 // needa incorporate pointers and stuff to this
 void printBoard(Piece board[8][8]) {
   {
@@ -576,6 +628,77 @@ void setupStartPosition(Piece board[8][8]) {
     for (int x = 0; x < 8; x++)
       board[y][x] = startBoard[y][x];
 }
+
+
+unsigned long long Perft(Piece board[8][8], int depth) {
+
+    unsigned long long nodes = 0;
+    int n_moves, i;
+    std::vector<Move> moveList;
+
+    if (depth == 0) {
+        return 1ULL;
+    }
+
+    GenerateLegalMoves(board, moveList);
+    n_moves = moveList.size();
+
+    for (i = 0; i < n_moves; i++) {
+
+        Move move = moveList[i];
+
+        Piece tempBoard[8][8];
+
+        // copy the current board
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) {
+                tempBoard[y][x] = board[y][x];
+            }
+        }
+
+        // make the move on the copy
+        movePiece(
+            tempBoard,
+            move.startX,
+            move.startY,
+            move.endX,
+            move.endY
+        );
+
+        // explore this branch
+        nodes += Perft(tempBoard, depth - 1);
+    }
+    return nodes;
+}
+
+
+//Perft(position, depth)
+
+  //  if depth == 0
+    //    count one leaf
+
+    //generate legal moves
+
+    //for each legal move
+       // make move
+        //recursively explore depth - 1
+        //restore position
+
+   // return total
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 int main() {
 
