@@ -1,1 +1,10 @@
+Current Issues:
+    Depth 1 works fine
+    dept 2 has 449 when it is supposed to have 440.
+    in depth 1 u can only move knights and pawns
 
+    depth 2
+    adds complexity of checks, en passants and special moves
+
+
+    So between depth 1 and 2 something wrong occurs

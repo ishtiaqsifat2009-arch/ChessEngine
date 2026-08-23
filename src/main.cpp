@@ -1,4 +1,3 @@
-
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -686,11 +685,23 @@ unsigned long long Perft(Piece board[8][8], int depth) {
       }
     }
 
+    // capture "before" state BEFORE movePiece touches the globals -
+    // movePiece unconditionally overwrites enPassantTarget every call,
+    // so grabbing it after movePiece would just save the NEW value
+    PieceColor turnBeforeThisMove = currentTurn;
+    Position enPassantBeforeThisMove = enPassantTarget;
+
     // make the move on the copy
     movePiece(tempBoard, move.startX, move.startY, move.endX, move.endY);
 
+    currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+
     // explore this branch
     nodes += Perft(tempBoard, depth - 1);
+
+    // restore both before trying the NEXT sibling move at this level
+    currentTurn = turnBeforeThisMove;
+    enPassantTarget = enPassantBeforeThisMove;
   }
   return nodes;
 }
@@ -754,7 +765,6 @@ int main() {
         std::cin >> startY >> endX >> endY;
 
         if (validateMove(board, startX, startY, endX, endY)) {
-
             if (wouldLeaveKingInCheck(board, startX, startY, endX, endY, currentTurn)) {
                 std::cout << "Illegal move - King in check\n";
             } else {
