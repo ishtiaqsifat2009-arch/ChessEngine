@@ -27,22 +27,16 @@ struct Position {
 };
 Position enPassantTarget = {-1, -1};
 
-//struct move for my Perfting
+// struct move for my Perfting
 //
-struct Move{
-    int startX;
-    int startY;
-    int endX;
-    int endY;
-
+struct Move {
+  int startX;
+  int startY;
+  int endX;
+  int endY;
 };
 
-//Generate Legal Move;
-
-
-
-
-
+// Generate Legal Move;
 
 // castling requires knowing if the king or the relevant rook has EVER moved
 bool whiteKingMoved = false;
@@ -101,11 +95,15 @@ void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
   }
   if (movingPiece.type == PieceType::rooks) {
     if (movingPiece.color == PieceColor::White) {
-      if (startX == 0 && startY == 0) whiteRookAMoved = true;
-      if (startX == 7 && startY == 0) whiteRookHMoved = true;
+      if (startX == 0 && startY == 0)
+        whiteRookAMoved = true;
+      if (startX == 7 && startY == 0)
+        whiteRookHMoved = true;
     } else {
-      if (startX == 0 && startY == 7) blackRookAMoved = true;
-      if (startX == 7 && startY == 7) blackRookHMoved = true;
+      if (startX == 0 && startY == 7)
+        blackRookAMoved = true;
+      if (startX == 7 && startY == 7)
+        blackRookHMoved = true;
     }
   }
 
@@ -194,25 +192,23 @@ bool PawnPromotion(Piece board[8][8], int endX, int endY) {
 
   if (board[endY][endX].type == PieceType::pawns) {
     if (endY == 0 || endY == 7) {
-        std::string choice;
-      std::cout<<"What Piece do you want instead?"<<std::endl;
-      std::cin>>choice;
+      std::string choice;
+      std::cout << "What Piece do you want instead?" << std::endl;
+      std::cin >> choice;
 
-      if (choice == "Knight"||choice=="Horse") {
-      board[endY][endX].type = PieceType::horse;
+      if (choice == "Knight" || choice == "Horse") {
+        board[endY][endX].type = PieceType::horse;
 
-      }else if (choice=="rook"||choice=="Rook") {
-          board[endY][endX].type = PieceType::rooks;
+      } else if (choice == "rook" || choice == "Rook") {
+        board[endY][endX].type = PieceType::rooks;
 
-      }else if (choice=="Bishop"||choice=="bishop") {
-          board[endY][endX].type = PieceType::bishops;
+      } else if (choice == "Bishop" || choice == "bishop") {
+        board[endY][endX].type = PieceType::bishops;
 
-      }else if (choice=="Queen"||choice=="queen") {
-          board[endY][endX].type = PieceType::queen;
-          return true;
+      } else if (choice == "Queen" || choice == "queen") {
+        board[endY][endX].type = PieceType::queen;
+        return true;
       }
-
-
     }
   }
   return false;
@@ -388,45 +384,65 @@ bool validateCastling(Piece board[8][8], int startX, int startY, int endX,
 
   // king must still be on its home square, castling stays on that row,
   // and it must be a 2-square horizontal hop
-  if (startY != homeRow || endY != homeRow || startX != 4) return false;
-  if (abs(endX - startX) != 2) return false;
+  if (startY != homeRow || endY != homeRow || startX != 4)
+    return false;
+  if (abs(endX - startX) != 2)
+    return false;
 
-  bool kingMoved = (currentTurn == PieceColor::White) ? whiteKingMoved : blackKingMoved;
-  if (kingMoved) return false;
+  bool kingMoved =
+      (currentTurn == PieceColor::White) ? whiteKingMoved : blackKingMoved;
+  if (kingMoved)
+    return false;
 
   // can't castle out of check
-  if (isKingInCheck(board, currentTurn)) return false;
+  if (isKingInCheck(board, currentTurn))
+    return false;
 
-  PieceColor enemyColor =
-      (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+  PieceColor enemyColor = (currentTurn == PieceColor::White)
+                              ? PieceColor::Black
+                              : PieceColor::White;
 
   if (endX == 6) {
     // kingside: rook must be on h-file and unmoved, f/g squares empty
-    bool rookMoved = (currentTurn == PieceColor::White) ? whiteRookHMoved : blackRookHMoved;
-    if (rookMoved) return false;
+    bool rookMoved =
+        (currentTurn == PieceColor::White) ? whiteRookHMoved : blackRookHMoved;
+    if (rookMoved)
+      return false;
     if (board[homeRow][7].type != PieceType::rooks ||
-        board[homeRow][7].color != currentTurn) return false;
-    if (isTaken(board, 5, homeRow) || isTaken(board, 6, homeRow)) return false;
+        board[homeRow][7].color != currentTurn)
+      return false;
+    if (isTaken(board, 5, homeRow) || isTaken(board, 6, homeRow))
+      return false;
 
     // king can't pass through OR land on an attacked square
-    if (isSquareAttacked(board, 4, homeRow, enemyColor)) return false;
-    if (isSquareAttacked(board, 5, homeRow, enemyColor)) return false;
-    if (isSquareAttacked(board, 6, homeRow, enemyColor)) return false;
+    if (isSquareAttacked(board, 4, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 5, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 6, homeRow, enemyColor))
+      return false;
     return true;
   }
 
   if (endX == 2) {
     // queenside: rook must be on a-file and unmoved, b/c/d squares empty
-    bool rookMoved = (currentTurn == PieceColor::White) ? whiteRookAMoved : blackRookAMoved;
-    if (rookMoved) return false;
+    bool rookMoved =
+        (currentTurn == PieceColor::White) ? whiteRookAMoved : blackRookAMoved;
+    if (rookMoved)
+      return false;
     if (board[homeRow][0].type != PieceType::rooks ||
-        board[homeRow][0].color != currentTurn) return false;
+        board[homeRow][0].color != currentTurn)
+      return false;
     if (isTaken(board, 1, homeRow) || isTaken(board, 2, homeRow) ||
-        isTaken(board, 3, homeRow)) return false;
+        isTaken(board, 3, homeRow))
+      return false;
 
-    if (isSquareAttacked(board, 4, homeRow, enemyColor)) return false;
-    if (isSquareAttacked(board, 3, homeRow, enemyColor)) return false;
-    if (isSquareAttacked(board, 2, homeRow, enemyColor)) return false;
+    if (isSquareAttacked(board, 4, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 3, homeRow, enemyColor))
+      return false;
+    if (isSquareAttacked(board, 2, homeRow, enemyColor))
+      return false;
     return true;
   }
 
@@ -487,8 +503,9 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
     movementValid = validateQueenMove(board, startX, startY, endX, endY);
     break;
   case PieceType::king:
-    movementValid = validateKingMove(board, startX, startY, endX, endY) ||
-                    validateCastling(board, startX, startY, endX, endY, currentTurn);
+    movementValid =
+        validateKingMove(board, startX, startY, endX, endY) ||
+        validateCastling(board, startX, startY, endX, endY, currentTurn);
     break;
 
   default:
@@ -510,40 +527,39 @@ bool validateMove(Piece board[8][8], int startX, int startY, int endX,
   return false;
 }
 
-void GenerateLegalMoves(Piece board[8][8], std::vector<Move>& move_list) {
-    for (int y = 0; y < 8; y++) {
-        for (int x = 0; x < 8; x++) {
+void GenerateLegalMoves(Piece board[8][8], std::vector<Move> &move_list) {
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
 
-            // is this one of our pieces
-            if (board[y][x].color == currentTurn &&
-                board[y][x].type != PieceType::none) {
+      // is this one of our pieces
+      if (board[y][x].color == currentTurn &&
+          board[y][x].type != PieceType::none) {
 
-                // try every possible place
-                for (int endY = 0; endY < 8; endY++) {
-                    for (int endX = 0; endX < 8; endX++) {
+        // try every possible place
+        for (int endY = 0; endY < 8; endY++) {
+          for (int endX = 0; endX < 8; endX++) {
 
-                        // this move legal?
-                        if (validateMove(board, x, y, endX, endY)) {
-                            //make  a move wth coordinates
-                            Move move;
-                            move.startX = x;
-                            move.startY = y;
-                            move.endX = endX;
-                            move.endY = endY;
+            // this move legal?
+            if (validateMove(board, x, y, endX, endY)) {
+              // make  a move wth coordinates
+              Move move;
+              move.startX = x;
+              move.startY = y;
+              move.endX = endX;
+              move.endY = endY;
 
-                            // Store the legal move
-                            move_list.push_back(move);
-                        }
-                    }
-                }
+              // Store the legal move
+              move_list.push_back(move);
+
             }
+          }
         }
+      }
     }
+  }
 }
 
-
-
-// needa incorporate pointers and stuff to this
+// need to incorporate pointers and stuff to this
 void printBoard(Piece board[8][8]) {
   {
 
@@ -574,163 +590,182 @@ void printBoard(Piece board[8][8]) {
 }
 
 void setupStartPosition(Piece board[8][8]) {
-  Piece startBoard[8][8] = {
-      {{PieceType::rooks, PieceColor::White},
-       {PieceType::horse, PieceColor::White},
-       {PieceType::bishops, PieceColor::White},
-       {PieceType::queen, PieceColor::White},
-       {PieceType::king, PieceColor::White},
-       {PieceType::bishops, PieceColor::White},
-       {PieceType::horse, PieceColor::White},
-       {PieceType::rooks, PieceColor::White}},
-      {{PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White},
-       {PieceType::pawns, PieceColor::White}},
-      {{PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None}},
-      {{PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None}},
-      {{PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None}},
-      {{PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None},
-       {PieceType::none, PieceColor::None}, {PieceType::none, PieceColor::None}},
-      {{PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black},
-       {PieceType::pawns, PieceColor::Black}},
-      {{PieceType::rooks, PieceColor::Black},
-       {PieceType::horse, PieceColor::Black},
-       {PieceType::bishops, PieceColor::Black},
-       {PieceType::queen, PieceColor::Black},
-       {PieceType::king, PieceColor::Black},
-       {PieceType::bishops, PieceColor::Black},
-       {PieceType::horse, PieceColor::Black},
-       {PieceType::rooks, PieceColor::Black}}};
+  Piece startBoard[8][8] = {{{PieceType::rooks, PieceColor::White},
+                             {PieceType::horse, PieceColor::White},
+                             {PieceType::bishops, PieceColor::White},
+                             {PieceType::queen, PieceColor::White},
+                             {PieceType::king, PieceColor::White},
+                             {PieceType::bishops, PieceColor::White},
+                             {PieceType::horse, PieceColor::White},
+                             {PieceType::rooks, PieceColor::White}},
+                            {{PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White},
+                             {PieceType::pawns, PieceColor::White}},
+                            {{PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None}},
+                            {{PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None}},
+                            {{PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None}},
+                            {{PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None},
+                             {PieceType::none, PieceColor::None}},
+                            {{PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black},
+                             {PieceType::pawns, PieceColor::Black}},
+                            {{PieceType::rooks, PieceColor::Black},
+                             {PieceType::horse, PieceColor::Black},
+                             {PieceType::bishops, PieceColor::Black},
+                             {PieceType::queen, PieceColor::Black},
+                             {PieceType::king, PieceColor::Black},
+                             {PieceType::bishops, PieceColor::Black},
+                             {PieceType::horse, PieceColor::Black},
+                             {PieceType::rooks, PieceColor::Black}}};
 
   for (int y = 0; y < 8; y++)
     for (int x = 0; x < 8; x++)
       board[y][x] = startBoard[y][x];
 }
 
-
 unsigned long long Perft(Piece board[8][8], int depth) {
 
-    unsigned long long nodes = 0;
-    int n_moves, i;
-    std::vector<Move> moveList;
+  unsigned long long nodes = 0;
+  int n_moves, i;
+  std::vector<Move> moveList;
 
-    if (depth == 0) {
-        return 1ULL;
-    }
-
-    GenerateLegalMoves(board, moveList);
-    n_moves = moveList.size();
-
-    for (i = 0; i < n_moves; i++) {
-
-        Move move = moveList[i];
-
-        Piece tempBoard[8][8];
-
-        // copy the current board
-        for (int y = 0; y < 8; y++) {
-            for (int x = 0; x < 8; x++) {
-                tempBoard[y][x] = board[y][x];
-            }
-        }
-
-        // make the move on the copy
-        movePiece(
-            tempBoard,
-            move.startX,
-            move.startY,
-            move.endX,
-            move.endY
-        );
-
-        // explore this branch
-        nodes += Perft(tempBoard, depth - 1);
-    }
-    return nodes;
-}
-
-
-//Perft(position, depth)
-
-  //  if depth == 0
-    //    count one leaf
-
-    //generate legal moves
-
-    //for each legal move
-       // make move
-        //recursively explore depth - 1
-        //restore position
-
-   // return total
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-int main() {
-
-  Piece board[8][8];
-  setupStartPosition(board);
-
-  printBoard(board);
-
-  while (true) {
-    int startX, startY;
-    int endX, endY;
-
-    std::cout << "Move piece: ";
-    std::cin >> startX >> startY >> endX >> endY;
-
-    if (validateMove(board, startX, startY, endX, endY)) {
-      if (wouldLeaveKingInCheck(board, startX, startY, endX, endY,
-                                currentTurn)) {
-        std::cout << "Illegal move - King in check\n";
-      } else {
-        movePiece(board, startX, startY, endX,
-                  endY); // only now touch the real board
-        PawnPromotion(board, endX, endY);
-
-        currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black
-                                                         : PieceColor::White;
-      }
-    } else {
-      std::cout << "Invalid move\n";
-    }
-    printBoard(board);
+  if (depth == 0) {
+    return 1ULL;
   }
 
-  return 0;
+  GenerateLegalMoves(board, moveList);
+  n_moves = moveList.size();
+
+  for (i = 0; i < n_moves; i++) {
+
+    Move move = moveList[i];
+
+    Piece tempBoard[8][8];
+
+    // copy the current board
+    for (int y = 0; y < 8; y++) {
+      for (int x = 0; x < 8; x++) {
+        tempBoard[y][x] = board[y][x];
+      }
+    }
+
+    // make the move on the copy
+    movePiece(tempBoard, move.startX, move.startY, move.endX, move.endY);
+
+    // explore this branch
+    nodes += Perft(tempBoard, depth - 1);
+  }
+  return nodes;
+}
+
+// Perft(position, depth)
+
+//  if depth == 0
+//    count one leaf
+
+// generate legal moves
+
+// for each legal move
+//  make move
+// recursively explore depth - 1
+// restore position
+
+// return total
+int main() {
+    Piece board[8][8];
+    setupStartPosition(board);
+    printBoard(board);
+
+    std::cout << "Commands: 'perft <depth>' to test, or '<startX> <startY> <endX> <endY>' to move.\n";
+
+    while (true) {
+        std::string input;
+        std::cout << "> ";
+        std::cin >> input;
+
+        // perft test
+        if (input == "perft") {
+            int depth;
+            if (std::cin >> depth) {
+                std::cout << "Running Perft at depth " << depth << "...\n";
+
+                // function call
+                // current Perft copies the board== value passed safely
+                unsigned long long nodes = Perft(board, depth);
+
+                std::cout << "Total nodes: " << nodes << std::endl;
+
+                // verification
+                if (depth <= 5) {
+                    unsigned long long expected[] = {0, 20, 400, 8902, 197281, 4865609};
+                    if (nodes == expected[depth]) {
+                        std::cout << "Matches correct nodes\n";
+                    } else {
+                        std::cout << "Wrong doesnt match: " << expected[depth] << "\n";
+                    }
+                }
+            } else {
+                std::cout << "Usage: perft <depth>\n";
+            }
+            continue; // Skip the rest of the loop and go back to prompt
+        }
+
+        // normal move
+        // If not perft then treat input as the startX coordinate
+        int startX = std::stoi(input);
+        int startY, endX, endY;
+        std::cin >> startY >> endX >> endY;
+
+        if (validateMove(board, startX, startY, endX, endY)) {
+
+            if (wouldLeaveKingInCheck(board, startX, startY, endX, endY, currentTurn)) {
+                std::cout << "Illegal move - King in check\n";
+            } else {
+                movePiece(board, startX, startY, endX, endY);
+                PawnPromotion(board, endX, endY);
+                currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+            }
+        } else {
+            std::cout << "Invalid move\n";
+        }
+        printBoard(board);
+    }
+    return 0;
 }
