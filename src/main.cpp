@@ -2,780 +2,481 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "../include/board.hpp"
 
-enum class PieceType {
-  none,
-  king,
-  queen,
-  rooks,
-  bishops,
-  horse,
-  pawns,
-};
+// ─── Bitboard primitives ──────────────────────────────────────────────────────
+static inline void      setBit  (Bitboard &bb, int sq) { bb |=  (1ULL << sq); }
+static inline void      clearBit(Bitboard &bb, int sq) { bb &= ~(1ULL << sq); }
+static inline bool      testBit (Bitboard  bb, int sq) { return (bb >> sq) & 1ULL; }
+static inline int       sq      (int x, int y)         { return y * 8 + x; }
+static inline int       sqX     (int s)                { return s % 8; }
+static inline int       sqY     (int s)                { return s / 8; }
+// Index of the lowest set bit (undefined if bb == 0)
+static inline int lsb(Bitboard bb) { return __builtin_ctzll(bb); }
 
-enum class PieceColor { None, White, Black };
+// ─── Board-query helpers ──────────────────────────────────────────────────────
+static bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
 
-struct Piece {
-  PieceType type;
-  PieceColor color;
-};
+static bool isTaken(const Board &b, int x, int y) {
+    return testBit(b.occupied(), sq(x, y));
+}
 
-struct Position {
-  int x;
-  int y;
-};
-Position enPassantTarget = {-1, -1};
+static bool canTake(const Board &b, int x, int y, PieceColor currentTurn) {
+    PieceColor enemy = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+    return b.colorAt(sq(x, y)) == enemy;
+}
 
-// struct move for my Perfting
-//
-struct Move {
-  int startX;
-  int startY;
-  int endX;
-  int endY;
-};
+// ─── Path-clear check (sliding pieces) ───────────────────────────────────────
+static bool isPathClear(const Board &b, int startX, int startY, int endX, int endY) {
+    int xDir = 0, yDir = 0;
+    int xDiff = endX - startX, yDiff = endY - startY;
+    if (xDiff > 0) xDir =  1; else if (xDiff < 0) xDir = -1;
+    if (yDiff > 0) yDir =  1; else if (yDiff < 0) yDir = -1;
 
-// Generate Legal Move;
-
-// castling requires knowing if the king or the relevant rook has EVER moved
-bool whiteKingMoved = false;
-bool blackKingMoved = false;
-bool whiteRookAMoved = false; // a-file rook (queenside)
-bool whiteRookHMoved = false; // h-file rook (kingside)
-bool blackRookAMoved = false;
-bool blackRookHMoved = false;
-
-bool isInsideBoard(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
-
-void movePiece(Piece board[8][8], int startX, int startY, int endX, int endY) {
-  if (!isInsideBoard(endX, endY)) {
-    std::cout << "Invalid position\n";
-    return;
-  }
-
-  Piece movingPiece = board[startY][startX];
-
-  // is this move actually an en passant capture?
-  bool isEnPassantCapture =
-      (movingPiece.type == PieceType::pawns && endX == enPassantTarget.x &&
-       endY == enPassantTarget.y);
-
-  if (isEnPassantCapture) {
-    // captured pawn isnt on (endX, endY):it's on the row the
-    // capturing pawn started from, but the column it's moving to
-    board[startY][endX] = {PieceType::none, PieceColor::None};
-  }
-
-  // is this move a castle? (king moving 2 squares sideways)
-  bool isCastling =
-      (movingPiece.type == PieceType::king && abs(endX - startX) == 2);
-
-  board[endY][endX] = movingPiece;
-  board[startY][startX] = {PieceType::none, PieceColor::None};
-
-  if (isCastling) {
-    if (endX == 6) {
-      // kingside: rook jumps from h-file (x=7) to f-file (x=5)
-      board[endY][5] = board[endY][7];
-      board[endY][7] = {PieceType::none, PieceColor::None};
-    } else if (endX == 2) {
-      // queenside: rook jumps from a-file (x=0) to d-file (x=3)
-      board[endY][3] = board[endY][0];
-      board[endY][0] = {PieceType::none, PieceColor::None};
+    for (int x = startX + xDir, y = startY + yDir;
+         x != endX || y != endY;
+         x += xDir, y += yDir)
+    {
+        if (isTaken(b, x, y)) return false;
     }
-  }
+    return true;
+}
 
-  // remember that this king/rook has now moved (disables future castling)
-  if (movingPiece.type == PieceType::king) {
-    if (movingPiece.color == PieceColor::White)
-      whiteKingMoved = true;
-    else
-      blackKingMoved = true;
-  }
-  if (movingPiece.type == PieceType::rooks) {
-    if (movingPiece.color == PieceColor::White) {
-      if (startX == 0 && startY == 0)
-        whiteRookAMoved = true;
-      if (startX == 7 && startY == 0)
-        whiteRookHMoved = true;
+// ─── Move validators ──────────────────────────────────────────────────────────
+static bool validateKnightMove(int startX, int startY, int endX, int endY) {
+    int dx = abs(endX - startX), dy = abs(endY - startY);
+    return (dx == 2 && dy == 1) || (dx == 1 && dy == 2);
+}
+
+static bool validateRookMove(const Board &b, int startX, int startY, int endX, int endY) {
+    int dx = abs(endX - startX), dy = abs(endY - startY);
+    return (dy == 0 && dx > 0 && isPathClear(b, startX, startY, endX, endY)) ||
+           (dx == 0 && dy > 0 && isPathClear(b, startX, startY, endX, endY));
+}
+
+static bool validateBishopMove(const Board &b, int startX, int startY, int endX, int endY) {
+    int dx = abs(endX - startX), dy = abs(endY - startY);
+    return dx == dy && dx > 0 && isPathClear(b, startX, startY, endX, endY);
+}
+
+static bool validateQueenMove(const Board &b, int startX, int startY, int endX, int endY) {
+    return validateBishopMove(b, startX, startY, endX, endY) ||
+           validateRookMove  (b, startX, startY, endX, endY);
+}
+
+static bool validateKingMove(int startX, int startY, int endX, int endY) {
+    int dx = abs(endX - startX), dy = abs(endY - startY);
+    return (dx <= 1 && dy <= 1 && (dx + dy > 0));
+}
+
+static bool validatePawnMove(const Board &b, int startX, int startY, int endX, int endY,
+                              PieceColor currentTurn)
+{
+    int xDiff = endX - startX, yDiff = endY - startY;
+    if (currentTurn == PieceColor::White) {
+        if (xDiff == 0 && yDiff == 1)
+            return !isTaken(b, endX, endY);
+        if (xDiff == 0 && yDiff == 2 && startY == 1)
+            return !isTaken(b, startX, startY + 1) && !isTaken(b, endX, endY);
+        if ((xDiff == 1 || xDiff == -1) && yDiff == 1) {
+            if (canTake(b, endX, endY, currentTurn)) return true;
+            // en passant: endX matches the file, endY == 5 (rank above the captured pawn on rank 4)
+            if (b.enPassantFile == endX && endY == 5) return true;
+        }
     } else {
-      if (startX == 0 && startY == 7)
-        blackRookAMoved = true;
-      if (startX == 7 && startY == 7)
-        blackRookHMoved = true;
+        if (xDiff == 0 && yDiff == -1)
+            return !isTaken(b, endX, endY);
+        if (xDiff == 0 && yDiff == -2 && startY == 6)
+            return !isTaken(b, startX, startY - 1) && !isTaken(b, endX, endY);
+        if ((xDiff == 1 || xDiff == -1) && yDiff == -1) {
+            if (canTake(b, endX, endY, currentTurn)) return true;
+            // en passant: endX matches the file, endY == 2
+            if (b.enPassantFile == endX && endY == 2) return true;
+        }
     }
-  }
-
-  // set up (or cancel) en passant for the opponent's NEXT move only
-  if (movingPiece.type == PieceType::pawns && abs(endY - startY) == 2) {
-    enPassantTarget = {startX,
-                       (startY + endY) / 2}; // square that got skipped over
-  } else {
-    enPassantTarget = {-1, -1};
-  }
+    return false;
 }
 
-// make the turn system
-//
+// ─── King location ────────────────────────────────────────────────────────────
+struct Position { int x, y; };
 
-// validate the piece Move
-
-// Is taken on board/position\n
-bool isTaken(Piece board[8][8], int endX, int endY) {
-  if (board[endY][endX].type != PieceType::none) {
-    return true;
-  }
-  return false;
-}
-// Limits on what to take:: can only take black and none position\n
-//
-//
-bool canTake(Piece board[8][8], int endX, int endY, PieceColor currentTurn) {
-  PieceColor enemyColor = (currentTurn == PieceColor::White)
-                              ? PieceColor::Black
-                              : PieceColor::White;
-  return board[endY][endX].color == enemyColor;
+static Position findKing(const Board &b, PieceColor color) {
+    Bitboard kingBB = (color == PieceColor::White) ? b.wKing : b.bKing;
+    if (kingBB == 0) return {-1, -1};
+    int s = lsb(kingBB);
+    return {sqX(s), sqY(s)};
 }
 
-// make an obsstacle check so check everything between 2 places to see if i can
-// move there
-bool isPathClear(Piece board[8][8], int startX, int startY, int endX,
-                 int endY) {
-  int xDirection = 0;
-  int yDirection = 0;
+// ─── Attack detection (forward declaration) ───────────────────────────────────
+static bool isSquareAttacked(const Board &b, int x, int y, PieceColor attackerColor);
 
-  int xDifference = endX - startX;
-  int yDifference = endY - startY;
+static bool isKingInCheck(const Board &b, PieceColor color) {
+    Position kp = findKing(b, color);
+    PieceColor enemy = (color == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+    return isSquareAttacked(b, kp.x, kp.y, enemy);
+}
 
-  if (xDifference > 0) {
-    xDirection = 1;
-  } else if (xDifference < 0) {
-    xDirection = -1;
-  }
-  if (yDifference > 0) {
-    yDirection = 1;
-  } else if (yDifference < 0) {
-    yDirection = -1;
-  }
+static bool isSquareAttacked(const Board &b, int x, int y, PieceColor attackerColor) {
+    Bitboard attackers = (attackerColor == PieceColor::White) ? b.whitePieces() : b.blackPieces();
+    Bitboard tmp = attackers;
+    while (tmp) {
+        int s = lsb(tmp);
+        tmp &= tmp - 1; // clear lowest set bit
+        int px = sqX(s), py = sqY(s);
+        PieceType pt = b.pieceAt(s);
+        int xDiff = x - px, yDiff = y - py;
 
-  for (int x = startX + xDirection, y = startY + yDirection;
-       x != endX || y != endY; x += xDirection, y += yDirection) {
-
-    // now for each square check it its taken.
-    // if yes then stop loop
-    // if not then continue loop until destination reached
-    //  if path clear then at end return true
-    if (isTaken(board, x, y)) {
-      return false;
+        switch (pt) {
+        case PieceType::pawns: {
+            int dir = (attackerColor == PieceColor::White) ? 1 : -1;
+            if (yDiff == dir && (xDiff == 1 || xDiff == -1)) return true;
+            break;
+        }
+        case PieceType::horse:
+            if (validateKnightMove(px, py, x, y)) return true;
+            break;
+        case PieceType::bishops:
+            if (validateBishopMove(b, px, py, x, y)) return true;
+            break;
+        case PieceType::rooks:
+            if (validateRookMove(b, px, py, x, y)) return true;
+            break;
+        case PieceType::queen:
+            if (validateQueenMove(b, px, py, x, y)) return true;
+            break;
+        case PieceType::king:
+            if (abs(xDiff) <= 1 && abs(yDiff) <= 1) return true;
+            break;
+        default: break;
+        }
     }
-  }
-
-  return true;
+    return false;
 }
 
-bool validateKnightMove(
-    // parameters
-    Piece board[8][8], int startX, int startY, int endX, int endY) {
+// ─── Castling validator ───────────────────────────────────────────────────────
+static bool validateCastling(const Board &b, int startX, int startY, int endX, int endY,
+                              PieceColor currentTurn)
+{
+    int homeRow = (currentTurn == PieceColor::White) ? 0 : 7;
+    if (startY != homeRow || endY != homeRow || startX != 4) return false;
+    if (abs(endX - startX) != 2) return false;
+    if (isKingInCheck(b, currentTurn)) return false;
 
-  int xDifference = abs(endX - startX);
-  int yDifference = abs(endY - startY);
-  if (xDifference == 2 && yDifference == 1 ||
-      xDifference == 1 && yDifference == 2) {
-    return true;
-  }
+    PieceColor enemy = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
 
-  return false;
-}
-
-bool PawnPromotion(Piece board[8][8], int endX, int endY) {
-
-  if (board[endY][endX].type == PieceType::pawns) {
-    if (endY == 0 || endY == 7) {
-      std::string choice;
-      std::cout << "What Piece do you want instead?" << std::endl;
-      std::cin >> choice;
-
-      if (choice == "Knight" || choice == "Horse") {
-        board[endY][endX].type = PieceType::horse;
-
-      } else if (choice == "rook" || choice == "Rook") {
-        board[endY][endX].type = PieceType::rooks;
-
-      } else if (choice == "Bishop" || choice == "bishop") {
-        board[endY][endX].type = PieceType::bishops;
-
-      } else if (choice == "Queen" || choice == "queen") {
-        board[endY][endX].type = PieceType::queen;
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// validate pawn movements
-bool validatePawnMove(Piece board[8][8], int startX, int startY, int endX,
-                      int endY, PieceColor currentTurn) {
-  int xDiff = endX - startX;
-  int yDiff = endY - startY;
-  // white pawn rules
-  if (currentTurn == PieceColor::White) {
-    if (xDiff == 0 && yDiff == 1) {
-      return !isTaken(board, endX, endY);
-    }
-    if (xDiff == 0 && yDiff == 2 && startY == 1) {
-      bool squareInFrontEmpty = !isTaken(board, startX, startY + 1);
-      bool destinationEmpty = !isTaken(board, endX, endY);
-      return squareInFrontEmpty && destinationEmpty;
-    }
-    if ((xDiff == 1 || xDiff == -1) && yDiff == 1) {
-      if (canTake(board, endX, endY, currentTurn))
-        return true;
-      if (endX == enPassantTarget.x && endY == enPassantTarget.y)
+    if (endX == 6) { // kingside
+        uint8_t flag = (currentTurn == PieceColor::White) ? CASTLE_WK : CASTLE_BK;
+        if (!(b.castlingRights & flag)) return false;
+        if (isTaken(b, 5, homeRow) || isTaken(b, 6, homeRow)) return false;
+        if (isSquareAttacked(b, 4, homeRow, enemy)) return false;
+        if (isSquareAttacked(b, 5, homeRow, enemy)) return false;
+        if (isSquareAttacked(b, 6, homeRow, enemy)) return false;
         return true;
     }
-  }
-
-  // Black Pawn rules
-  if (currentTurn == PieceColor::Black) {
-    if (xDiff == 0 && yDiff == -1) {
-      return !isTaken(board, endX, endY);
-    }
-    if (xDiff == 0 && yDiff == -2 && startY == 6) {
-      bool squareInFrontEmpty = !isTaken(board, startX, startY - 1);
-      bool destinationEmpty = !isTaken(board, endX, endY);
-      return squareInFrontEmpty && destinationEmpty;
-    }
-    if ((xDiff == 1 || xDiff == -1) && yDiff == -1) {
-      if (canTake(board, endX, endY, currentTurn))
-        return true;
-      if (endX == enPassantTarget.x && endY == enPassantTarget.y)
+    if (endX == 2) { // queenside
+        uint8_t flag = (currentTurn == PieceColor::White) ? CASTLE_WQ : CASTLE_BQ;
+        if (!(b.castlingRights & flag)) return false;
+        if (isTaken(b, 1, homeRow) || isTaken(b, 2, homeRow) || isTaken(b, 3, homeRow)) return false;
+        if (isSquareAttacked(b, 4, homeRow, enemy)) return false;
+        if (isSquareAttacked(b, 3, homeRow, enemy)) return false;
+        if (isSquareAttacked(b, 2, homeRow, enemy)) return false;
         return true;
     }
-  }
-
-  return false;
-}
-// validare the rooks
-bool validateRookMove(Piece board[8][8], int startX, int startY, int endX,
-                      int endY) {
-  int xDifference = abs(endX - startX);
-  int yDifference = abs(endY - startY);
-
-  if (yDifference == 0 && xDifference > 0 &&
-          isPathClear(board, startX, startY, endX, endY) ||
-      yDifference > 0 && xDifference == 0 &&
-          isPathClear(board, startX, startY, endX, endY)) {
-
-    return true;
-  }
-  return false;
-}
-// validate Bishop movements
-bool validateBishopMove(Piece board[8][8], int startX, int startY, int endX,
-                        int endY) {
-  int xDifference = abs(endX - startX);
-  int yDifference = abs(endY - startY);
-  if (xDifference == yDifference && xDifference > 0 &&
-      isPathClear(board, startX, startY, endX, endY)) {
-    return true;
-  }
-  return false;
+    return false;
 }
 
-// queen move checker (uses bishops and rooks instead of anything new)
-bool validateQueenMove(Piece board[8][8], int startX, int startY, int endX,
-                       int endY) {
-  if (validateBishopMove(board, startX, startY, endX, endY) ||
-      validateRookMove(board, startX, startY, endX, endY)) {
-    return true;
-  }
+// ─── Move validation (combined) ───────────────────────────────────────────────
+static bool validateMove(const Board &b, int startX, int startY, int endX, int endY) {
+    PieceType  pt = b.pieceAt(sq(startX, startY));
+    PieceColor pc = b.colorAt(sq(startX, startY));
 
-  return false;
-}
-
-bool validateKingMove(Piece board[8][8], int startX, int startY, int endX,
-                      int endY) {
-  int xDifference = abs(endX - startX);
-  int yDifference = abs(endY - startY);
-  if (xDifference == 1 && yDifference == 1 ||
-      xDifference == 1 && yDifference == 0 ||
-      xDifference == 0 && yDifference == 1) {
-    return true;
-  }
-  if (xDifference == 2 && yDifference == 0) {
-  }
-
-  return false;
-}
-
-// find the king
-//
-
-Position findKing(Piece board[8][8], PieceColor color) {
-  for (int y = 0; y < 8; y++) {
-    for (int x = 0; x < 8; x++) {
-      if (board[y][x].type == PieceType::king && board[y][x].color == color) {
-        return {x, y};
-      }
+    if (pc != b.currentTurn) {
+        std::cout << "It's not your turn\n";
+        return false;
     }
-  }
-  return {-1, -1};
-}
 
-bool isSquareAttacked(Piece board[8][8], int x, int y,
-                      PieceColor attackerColor) {
-  for (int py = 0; py < 8; py++) {
-    for (int px = 0; px < 8; px++) {
-      Piece piece = board[py][px];
-      if (piece.color != attackerColor)
-        continue;
-
-      int xDiff = x - px;
-      int yDiff = y - py;
-
-      switch (piece.type) {
-      case PieceType::pawns: {
-        // pawns attack diagonally only +  direction depends on color
-        int direction = (attackerColor == PieceColor::White) ? 1 : -1;
-        if (yDiff == direction && (xDiff == 1 || xDiff == -1))
-          return true;
+    bool movementValid = false;
+    switch (pt) {
+    case PieceType::pawns:
+        movementValid = validatePawnMove(b, startX, startY, endX, endY, b.currentTurn);
         break;
-      }
-      case PieceType::horse:
-        if (validateKnightMove(board, px, py, x, y))
-          return true;
+    case PieceType::rooks:
+        movementValid = validateRookMove(b, startX, startY, endX, endY);
         break;
-      case PieceType::bishops:
-        if (validateBishopMove(board, px, py, x, y))
-          return true;
+    case PieceType::horse:
+        movementValid = validateKnightMove(startX, startY, endX, endY);
         break;
-      case PieceType::rooks:
-        if (validateRookMove(board, px, py, x, y))
-          return true;
+    case PieceType::bishops:
+        movementValid = validateBishopMove(b, startX, startY, endX, endY);
         break;
-      case PieceType::queen:
-        if (validateQueenMove(board, px, py, x, y))
-          return true;
+    case PieceType::queen:
+        movementValid = validateQueenMove(b, startX, startY, endX, endY);
         break;
-      case PieceType::king:
-        if (abs(xDiff) <= 1 && abs(yDiff) <= 1)
-          return true;
+    case PieceType::king:
+        movementValid = validateKingMove(startX, startY, endX, endY) ||
+                        validateCastling(b, startX, startY, endX, endY, b.currentTurn);
         break;
-      default:
-        break;
-      }
+    default:
+        return false;
     }
-  }
-  return false;
+
+    if (!movementValid) return false;
+    if (!isTaken(b, endX, endY)) return true;
+    return canTake(b, endX, endY, b.currentTurn);
 }
 
-bool isKingInCheck(Piece board[8][8], PieceColor color) {
-  Position kingPos = findKing(board, color);
-  PieceColor enemyColor =
-      (color == PieceColor::White) ? PieceColor::Black : PieceColor::White;
-  return isSquareAttacked(board, kingPos.x, kingPos.y, enemyColor);
-}
+// ─── Apply a move to a Board (mutates) ───────────────────────────────────────
+static void movePiece(Board &b, int startX, int startY, int endX, int endY) {
+    int fromSq = sq(startX, startY);
+    int toSq   = sq(endX,   endY);
 
-bool validateCastling(Piece board[8][8], int startX, int startY, int endX,
-                      int endY, PieceColor currentTurn) {
-  int homeRow = (currentTurn == PieceColor::White) ? 0 : 7;
+    PieceType  pt = b.pieceAt(fromSq);
+    PieceColor pc = b.colorAt(fromSq);
 
-  // king must still be on its home square, castling stays on that row,
-  // and it must be a 2-square horizontal hop
-  if (startY != homeRow || endY != homeRow || startX != 4)
-    return false;
-  if (abs(endX - startX) != 2)
-    return false;
-
-  bool kingMoved =
-      (currentTurn == PieceColor::White) ? whiteKingMoved : blackKingMoved;
-  if (kingMoved)
-    return false;
-
-  // can't castle out of check
-  if (isKingInCheck(board, currentTurn))
-    return false;
-
-  PieceColor enemyColor = (currentTurn == PieceColor::White)
-                              ? PieceColor::Black
-                              : PieceColor::White;
-
-  if (endX == 6) {
-    // kingside: rook must be on h-file and unmoved, f/g squares empty
-    bool rookMoved =
-        (currentTurn == PieceColor::White) ? whiteRookHMoved : blackRookHMoved;
-    if (rookMoved)
-      return false;
-    if (board[homeRow][7].type != PieceType::rooks ||
-        board[homeRow][7].color != currentTurn)
-      return false;
-    if (isTaken(board, 5, homeRow) || isTaken(board, 6, homeRow))
-      return false;
-
-    // king can't pass through OR land on an attacked square
-    if (isSquareAttacked(board, 4, homeRow, enemyColor))
-      return false;
-    if (isSquareAttacked(board, 5, homeRow, enemyColor))
-      return false;
-    if (isSquareAttacked(board, 6, homeRow, enemyColor))
-      return false;
-    return true;
-  }
-
-  if (endX == 2) {
-    // queenside: rook must be on a-file and unmoved, b/c/d squares empty
-    bool rookMoved =
-        (currentTurn == PieceColor::White) ? whiteRookAMoved : blackRookAMoved;
-    if (rookMoved)
-      return false;
-    if (board[homeRow][0].type != PieceType::rooks ||
-        board[homeRow][0].color != currentTurn)
-      return false;
-    if (isTaken(board, 1, homeRow) || isTaken(board, 2, homeRow) ||
-        isTaken(board, 3, homeRow))
-      return false;
-
-    if (isSquareAttacked(board, 4, homeRow, enemyColor))
-      return false;
-    if (isSquareAttacked(board, 3, homeRow, enemyColor))
-      return false;
-    if (isSquareAttacked(board, 2, homeRow, enemyColor))
-      return false;
-    return true;
-  }
-
-  return false;
-}
-
-bool wouldLeaveKingInCheck(Piece board[8][8], int startX, int startY, int endX,
-                           int endY, PieceColor movingColor) {
-  //  copy board
-  Piece tempBoard[8][8];
-  for (int y = 0; y < 8; y++) {
-    for (int x = 0; x < 8; x++) {
-      tempBoard[y][x] = board[y][x];
+    // Remove any piece on the destination (capture)
+    if (testBit(b.occupied(), toSq)) {
+        PieceColor victimColor = b.colorAt(toSq);
+        PieceType  victimType  = b.pieceAt(toSq);
+        clearBit(b.bbOf(victimColor, victimType), toSq);
     }
-  }
 
-  //  simulate the move on the copy only
-  tempBoard[endY][endX] = tempBoard[startY][startX];
-  tempBoard[startY][startX] = {PieceType::none, PieceColor::None};
+    // En passant capture: remove the captured pawn
+    bool isEnPassant = (pt == PieceType::pawns && endX == b.enPassantFile &&
+                        ((pc == PieceColor::White && endY == 5) ||
+                         (pc == PieceColor::Black && endY == 2)));
+    if (isEnPassant) {
+        int capturedPawnY = (pc == PieceColor::White) ? 4 : 3;
+        int capturedSq    = sq(endX, capturedPawnY);
+        PieceColor enemyColor = (pc == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+        clearBit(b.bbOf(enemyColor, PieceType::pawns), capturedSq);
+    }
 
-  //  check if that leaves the king in check
-  return isKingInCheck(tempBoard, movingColor);
+    // Move the piece
+    clearBit(b.bbOf(pc, pt), fromSq);
+    setBit  (b.bbOf(pc, pt), toSq);
+
+    // Castling: move the rook too
+    bool isCastling = (pt == PieceType::king && abs(endX - startX) == 2);
+    if (isCastling) {
+        int row = startY;
+        if (endX == 6) { // kingside
+            int rookFrom = sq(7, row), rookTo = sq(5, row);
+            clearBit(b.bbOf(pc, PieceType::rooks), rookFrom);
+            setBit  (b.bbOf(pc, PieceType::rooks), rookTo);
+        } else if (endX == 2) { // queenside
+            int rookFrom = sq(0, row), rookTo = sq(3, row);
+            clearBit(b.bbOf(pc, PieceType::rooks), rookFrom);
+            setBit  (b.bbOf(pc, PieceType::rooks), rookTo);
+        }
+    }
+
+    // Update castling rights
+    if (pt == PieceType::king) {
+        if (pc == PieceColor::White)
+            b.castlingRights &= ~(CASTLE_WK | CASTLE_WQ);
+        else
+            b.castlingRights &= ~(CASTLE_BK | CASTLE_BQ);
+    }
+    if (pt == PieceType::rooks) {
+        if (pc == PieceColor::White) {
+            if (startX == 0 && startY == 0) b.castlingRights &= ~CASTLE_WQ;
+            if (startX == 7 && startY == 0) b.castlingRights &= ~CASTLE_WK;
+        } else {
+            if (startX == 0 && startY == 7) b.castlingRights &= ~CASTLE_BQ;
+            if (startX == 7 && startY == 7) b.castlingRights &= ~CASTLE_BK;
+        }
+    }
+    // A rook being captured also loses castling rights
+    if (b.pieceAt(toSq) == PieceType::rooks) {
+        if (endX == 0 && endY == 0) b.castlingRights &= ~CASTLE_WQ;
+        if (endX == 7 && endY == 0) b.castlingRights &= ~CASTLE_WK;
+        if (endX == 0 && endY == 7) b.castlingRights &= ~CASTLE_BQ;
+        if (endX == 7 && endY == 7) b.castlingRights &= ~CASTLE_BK;
+    }
+
+    // Update en passant file
+    if (pt == PieceType::pawns && abs(endY - startY) == 2)
+        b.enPassantFile = startX;
+    else
+        b.enPassantFile = -1;
 }
 
-// make turn system
-//
-PieceColor currentTurn = PieceColor::White;
-bool validateMove(Piece board[8][8], int startX, int startY, int endX,
-                  int endY) {
-  Piece piece = board[startY][startX];
-
-  // turn system before the switch statements
-  //
-  if (piece.color != currentTurn) {
-    std::cout << "Its not your turn\n";
-    return false;
-  }
-
-  bool movementValid;
-
-  switch (piece.type) {
-  case PieceType::pawns:
-    movementValid =
-        validatePawnMove(board, startX, startY, endX, endY, currentTurn);
-    break;
-
-  case PieceType::rooks:
-    movementValid = validateRookMove(board, startX, startY, endX, endY);
-    break;
-
-  case PieceType::horse:
-    movementValid = validateKnightMove(board, startX, startY, endX, endY);
-    break;
-  case PieceType::bishops:
-    movementValid = validateBishopMove(board, startX, startY, endX, endY);
-    break;
-  case PieceType::queen:
-    movementValid = validateQueenMove(board, startX, startY, endX, endY);
-    break;
-  case PieceType::king:
-    movementValid =
-        validateKingMove(board, startX, startY, endX, endY) ||
-        validateCastling(board, startX, startY, endX, endY, currentTurn);
-    break;
-
-  default:
-    return false;
-  }
-
-  // forward with it
-  if (!movementValid) {
-    return false;
-  }
-  if (!isTaken(board, endX, endY)) {
-    return true;
-  }
-
-  if (canTake(board, endX, endY, currentTurn)) {
-    return true;
-  }
-
-  return false;
+// ─── Would-leave-king-in-check test ──────────────────────────────────────────
+static bool wouldLeaveKingInCheck(const Board &b, int startX, int startY, int endX, int endY,
+                                   PieceColor movingColor)
+{
+    Board temp = b; // trivially copyable
+    movePiece(temp, startX, startY, endX, endY);
+    return isKingInCheck(temp, movingColor);
 }
 
-void GenerateLegalMoves(Piece board[8][8], std::vector<Move> &move_list) {
-  for (int y = 0; y < 8; y++) {
-    for (int x = 0; x < 8; x++) {
+// ─── Pawn promotion ───────────────────────────────────────────────────────────
+static void PawnPromotion(Board &b, int endX, int endY) {
+    int toSq = sq(endX, endY);
+    PieceColor pc = b.colorAt(toSq);
+    if (b.pieceAt(toSq) != PieceType::pawns) return;
+    if (endY != 0 && endY != 7) return;
 
-      // is this one of our pieces
-      if (board[y][x].color == currentTurn &&
-          board[y][x].type != PieceType::none) {
+    std::string choice;
+    std::cout << "What Piece do you want instead? ";
+    std::cin >> choice;
 
-        // try every possible place
-        for (int endY = 0; endY < 8; endY++) {
-          for (int endX = 0; endX < 8; endX++) {
+    PieceType newType = PieceType::queen; // default
+    if      (choice == "Knight" || choice == "Horse" || choice == "knight" || choice == "horse")
+        newType = PieceType::horse;
+    else if (choice == "Rook"   || choice == "rook")
+        newType = PieceType::rooks;
+    else if (choice == "Bishop" || choice == "bishop")
+        newType = PieceType::bishops;
 
-            // this move legal?
-            if (validateMove(board, x, y, endX, endY)) {
-              // make  a move wth coordinates
-              Move move;
-              move.startX = x;
-              move.startY = y;
-              move.endX = endX;
-              move.endY = endY;
+    clearBit(b.bbOf(pc, PieceType::pawns), toSq);
+    setBit  (b.bbOf(pc, newType),           toSq);
+}
 
-              // Store the legal move
-              move_list.push_back(move);
+// ─── Legal move generation ────────────────────────────────────────────────────
+struct Move { int startX, startY, endX, endY; };
 
+static void GenerateLegalMoves(const Board &b, std::vector<Move> &move_list) {
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            int s = sq(x, y);
+            if (b.colorAt(s) != b.currentTurn || b.pieceAt(s) == PieceType::none)
+                continue;
+            for (int endY = 0; endY < 8; endY++) {
+                for (int endX = 0; endX < 8; endX++) {
+                    if (validateMove(b, x, y, endX, endY)) {
+                        if (!wouldLeaveKingInCheck(b, x, y, endX, endY, b.currentTurn))
+                            move_list.push_back({x, y, endX, endY});
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 }
 
-// need to incorporate pointers and stuff to this
-void printBoard(Piece board[8][8]) {
-  {
-
-    for (int y = 0; y < 8; y++) {
-      for (int x = 0; x < 8; x++) {
-        Piece piece = board[y][x];
-
-        if (piece.type == PieceType::none) {
-          std::cout << ". ";
-        } else if (piece.type == PieceType::pawns) {
-          std::cout << "P ";
-        } else if (piece.type == PieceType::rooks) {
-          std::cout << "R ";
-        } else if (piece.type == PieceType::horse) {
-          std::cout << "N ";
-        } else if (piece.type == PieceType::bishops) {
-          std::cout << "B ";
-        } else if (piece.type == PieceType::queen) {
-          std::cout << "Q ";
-        } else if (piece.type == PieceType::king) {
-          std::cout << "K ";
+// ─── Board display ────────────────────────────────────────────────────────────
+static void printBoard(const Board &b) {
+    for (int y = 7; y >= 0; y--) {               // rank 8 at top, rank 1 at bottom
+        std::cout << (y + 1) << "  ";
+        for (int x = 0; x < 8; x++) {
+            int s = sq(x, y);
+            PieceType  pt = b.pieceAt(s);
+            PieceColor pc = b.colorAt(s);
+            char c = '.';
+            switch (pt) {
+            case PieceType::pawns:   c = 'p'; break;
+            case PieceType::horse:   c = 'n'; break;
+            case PieceType::bishops: c = 'b'; break;
+            case PieceType::rooks:   c = 'r'; break;
+            case PieceType::queen:   c = 'q'; break;
+            case PieceType::king:    c = 'k'; break;
+            default:                 c = '.'; break;
+            }
+            if (pc == PieceColor::White) c = (char)(c - 32); // uppercase for white
+            std::cout << c << ' ';
         }
-      }
-
-      std::cout << "\n";
+        std::cout << '\n';
     }
-  }
+    std::cout << "\n   a b c d e f g h\n\n";
 }
 
-void setupStartPosition(Piece board[8][8]) {
-  Piece startBoard[8][8] = {{{PieceType::rooks, PieceColor::White},
-                             {PieceType::horse, PieceColor::White},
-                             {PieceType::bishops, PieceColor::White},
-                             {PieceType::queen, PieceColor::White},
-                             {PieceType::king, PieceColor::White},
-                             {PieceType::bishops, PieceColor::White},
-                             {PieceType::horse, PieceColor::White},
-                             {PieceType::rooks, PieceColor::White}},
-                            {{PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White},
-                             {PieceType::pawns, PieceColor::White}},
-                            {{PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None}},
-                            {{PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None}},
-                            {{PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None}},
-                            {{PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None},
-                             {PieceType::none, PieceColor::None}},
-                            {{PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black},
-                             {PieceType::pawns, PieceColor::Black}},
-                            {{PieceType::rooks, PieceColor::Black},
-                             {PieceType::horse, PieceColor::Black},
-                             {PieceType::bishops, PieceColor::Black},
-                             {PieceType::queen, PieceColor::Black},
-                             {PieceType::king, PieceColor::Black},
-                             {PieceType::bishops, PieceColor::Black},
-                             {PieceType::horse, PieceColor::Black},
-                             {PieceType::rooks, PieceColor::Black}}};
+// ─── Starting position ────────────────────────────────────────────────────────
+static void setupStartPosition(Board &b) {
+    b = Board{}; // zero everything, reset defaults
 
-  for (int y = 0; y < 8; y++)
-    for (int x = 0; x < 8; x++)
-      board[y][x] = startBoard[y][x];
+    // White pieces (rank 1 = y=0, rank 2 = y=1)
+    b.wRooks   = (1ULL << sq(0,0)) | (1ULL << sq(7,0));
+    b.wKnights = (1ULL << sq(1,0)) | (1ULL << sq(6,0));
+    b.wBishops = (1ULL << sq(2,0)) | (1ULL << sq(5,0));
+    b.wQueens  =  1ULL << sq(3,0);
+    b.wKing    =  1ULL << sq(4,0);
+    b.wPawns   = 0;
+    for (int x = 0; x < 8; x++) setBit(b.wPawns, sq(x, 1));
+
+    // Black pieces (rank 8 = y=7, rank 7 = y=6)
+    b.bRooks   = (1ULL << sq(0,7)) | (1ULL << sq(7,7));
+    b.bKnights = (1ULL << sq(1,7)) | (1ULL << sq(6,7));
+    b.bBishops = (1ULL << sq(2,7)) | (1ULL << sq(5,7));
+    b.bQueens  =  1ULL << sq(3,7);
+    b.bKing    =  1ULL << sq(4,7);
+    b.bPawns   = 0;
+    for (int x = 0; x < 8; x++) setBit(b.bPawns, sq(x, 6));
+
+    b.castlingRights = CASTLE_WK | CASTLE_WQ | CASTLE_BK | CASTLE_BQ;
+    b.enPassantFile  = -1;
+    b.currentTurn    = PieceColor::White;
 }
 
-unsigned long long Perft(Piece board[8][8], int depth) {
+// ─── Perft ────────────────────────────────────────────────────────────────────
+static unsigned long long Perft(Board b, int depth) {
+    // b is passed by value — each call operates on its own copy
+    if (depth == 0) return 1ULL;
 
-  unsigned long long nodes = 0;
-  int n_moves, i;
-  std::vector<Move> moveList;
+    std::vector<Move> moveList;
+    GenerateLegalMoves(b, moveList);
 
-  if (depth == 0) {
-    return 1ULL;
-  }
-
-  GenerateLegalMoves(board, moveList);
-  n_moves = moveList.size();
-
-  for (i = 0; i < n_moves; i++) {
-
-    Move move = moveList[i];
-
-    Piece tempBoard[8][8];
-
-    // copy the current board
-    for (int y = 0; y < 8; y++) {
-      for (int x = 0; x < 8; x++) {
-        tempBoard[y][x] = board[y][x];
-      }
+    unsigned long long nodes = 0;
+    for (const Move &move : moveList) {
+        Board child = b;
+        movePiece(child, move.startX, move.startY, move.endX, move.endY);
+        child.currentTurn = (b.currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+        nodes += Perft(child, depth - 1);
     }
-
-    // capture "before" state BEFORE movePiece touches the globals -
-    // movePiece unconditionally overwrites enPassantTarget every call,
-    // so grabbing it after movePiece would just save the NEW value
-    PieceColor turnBeforeThisMove = currentTurn;
-    Position enPassantBeforeThisMove = enPassantTarget;
-
-    // make the move on the copy
-    movePiece(tempBoard, move.startX, move.startY, move.endX, move.endY);
-
-    currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
-
-    // explore this branch
-    nodes += Perft(tempBoard, depth - 1);
-
-    // restore both before trying the NEXT sibling move at this level
-    currentTurn = turnBeforeThisMove;
-    enPassantTarget = enPassantBeforeThisMove;
-  }
-  return nodes;
+    return nodes;
 }
 
-// Perft(position, depth)
-
-//  if depth == 0
-//    count one leaf
-
-// generate legal moves
-
-// for each legal move
-//  make move
-// recursively explore depth - 1
-// restore position
-
-// return total
+// ─── Main ─────────────────────────────────────────────────────────────────────
 int main() {
-    Piece board[8][8];
+    Board board;
     setupStartPosition(board);
     printBoard(board);
 
     std::cout << "Commands: 'perft <depth>' to test, or '<startX> <startY> <endX> <endY>' to move.\n";
+    std::cout << "Columns: a=0 b=1 c=2 d=3 e=4 f=5 g=6 h=7  |  Rows: 1-8 (displayed as 0-7 internally)\n\n";
 
     while (true) {
         std::string input;
-        std::cout << "> ";
+        std::cout << (board.currentTurn == PieceColor::White ? "White" : "Black") << " > ";
         std::cin >> input;
+        if (!std::cin) break;
 
         // perft test
         if (input == "perft") {
             int depth;
             if (std::cin >> depth) {
                 std::cout << "Running Perft at depth " << depth << "...\n";
-
-                // function call
-                // current Perft copies the board== value passed safely
                 unsigned long long nodes = Perft(board, depth);
-
-                std::cout << "Total nodes: " << nodes << std::endl;
-
-                // verification
+                std::cout << "Total nodes: " << nodes << "\n";
                 if (depth <= 5) {
                     unsigned long long expected[] = {0, 20, 400, 8902, 197281, 4865609};
-                    if (nodes == expected[depth]) {
-                        std::cout << "Matches correct nodes\n";
-                    } else {
-                        std::cout << "Wrong doesnt match: " << expected[depth] << "\n";
-                    }
+                    if (nodes == expected[depth])
+                        std::cout << "✓ Matches expected node count\n";
+                    else
+                        std::cout << "✗ Expected " << expected[depth] << "\n";
                 }
             } else {
                 std::cout << "Usage: perft <depth>\n";
             }
-            continue; // Skip the rest of the loop and go back to prompt
+            continue;
         }
 
-        // normal move
-        // If not perft then treat input as the startX coordinate
+        // normal move: input is startX, then read startY endX endY
         int startX = std::stoi(input);
         int startY, endX, endY;
         std::cin >> startY >> endX >> endY;
 
         if (validateMove(board, startX, startY, endX, endY)) {
-            if (wouldLeaveKingInCheck(board, startX, startY, endX, endY, currentTurn)) {
-                std::cout << "Illegal move - King in check\n";
+            if (wouldLeaveKingInCheck(board, startX, startY, endX, endY, board.currentTurn)) {
+                std::cout << "Illegal move – king would be in check\n";
             } else {
                 movePiece(board, startX, startY, endX, endY);
                 PawnPromotion(board, endX, endY);
-                currentTurn = (currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+                board.currentTurn = (board.currentTurn == PieceColor::White) ? PieceColor::Black : PieceColor::White;
+                printBoard(board);
             }
         } else {
             std::cout << "Invalid move\n";
         }
-        printBoard(board);
     }
     return 0;
 }
