@@ -1,2 +1,10 @@
 build/
+cmake-build-debug/
+build_out
 .DS_Store
+.idea/
+.cache/
+.nova/
+.vscode/
+*.swp
+*.kate-swp

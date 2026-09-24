@@ -1,6 +1,7 @@
 #ifndef BOARD_HPP
 #define BOARD_HPP
 
+#include <cassert>
 #include <cstdint>
 #include <string>
 
@@ -21,6 +22,15 @@ enum class PieceType {
 };
 
 enum class PieceColor { None, White, Black };
+
+// ─── Bitboard Primitives ──────────────────────────────────────────────────────
+static inline void      setBit  (Bitboard &bb, int s)  { bb |=  (1ULL << s); }
+static inline void      clearBit(Bitboard &bb, int s)  { bb &= ~(1ULL << s); }
+static inline bool      testBit (Bitboard  bb, int s)  { return (bb >> s) & 1ULL; }
+static inline int       sq      (int x, int y)         { return y * 8 + x; }
+static inline int       sqX     (int s)                { return s % 8; }
+static inline int       sqY     (int s)                { return s / 8; }
+static inline int       lsb     (Bitboard bb)          { return __builtin_ctzll(bb); }
 
 // ─── Move Representation ──────────────────────────────────────────────────────
 struct Move {
@@ -69,7 +79,9 @@ struct Board {
     // Game state
     int        enPassantFile  = -1;          // -1 = none; 0-7 = file of pawn that just double-pushed
     uint8_t    castlingRights = CASTLE_WK | CASTLE_WQ | CASTLE_BK | CASTLE_BQ;
-    PieceColor currentTurn   = PieceColor::White;
+    PieceColor currentTurn    = PieceColor::White;
+    int        halfMoveClock  = 0;           // 50-move rule counter (100 half-moves = draw)
+    int        fullMoveNumber = 1;           // Incremented after Black moves
 
     // ── Occupancy helpers ─────────────────────────────────────────────────────
     Bitboard whitePieces() const {
@@ -81,19 +93,19 @@ struct Board {
     Bitboard occupied() const { return whitePieces() | blackPieces(); }
 
     // ── Piece / color at a square ─────────────────────────────────────────────
-    PieceType pieceAt(int sq) const {
-        Bitboard mask = 1ULL << sq;
-        if (wPawns   & mask || bPawns   & mask) return PieceType::pawns;
-        if (wKnights & mask || bKnights & mask) return PieceType::horse;
-        if (wBishops & mask || bBishops & mask) return PieceType::bishops;
-        if (wRooks   & mask || bRooks   & mask) return PieceType::rooks;
-        if (wQueens  & mask || bQueens  & mask) return PieceType::queen;
-        if (wKing    & mask || bKing    & mask) return PieceType::king;
+    PieceType pieceAt(int s) const {
+        Bitboard mask = 1ULL << s;
+        if ((wPawns | bPawns) & mask)     return PieceType::pawns;
+        if ((wKnights | bKnights) & mask) return PieceType::horse;
+        if ((wBishops | bBishops) & mask) return PieceType::bishops;
+        if ((wRooks | bRooks) & mask)     return PieceType::rooks;
+        if ((wQueens | bQueens) & mask)   return PieceType::queen;
+        if ((wKing | bKing) & mask)       return PieceType::king;
         return PieceType::none;
     }
 
-    PieceColor colorAt(int sq) const {
-        Bitboard mask = 1ULL << sq;
+    PieceColor colorAt(int s) const {
+        Bitboard mask = 1ULL << s;
         if (whitePieces() & mask) return PieceColor::White;
         if (blackPieces() & mask) return PieceColor::Black;
         return PieceColor::None;
@@ -111,7 +123,7 @@ struct Board {
                 case PieceType::king:    return wKing;
                 default: break;
             }
-        } else {
+        } else if (c == PieceColor::Black) {
             switch (t) {
                 case PieceType::pawns:   return bPawns;
                 case PieceType::horse:   return bKnights;
@@ -122,7 +134,35 @@ struct Board {
                 default: break;
             }
         }
+        assert(false && "bbOf called with invalid piece type or color");
         static Bitboard dummy = 0;
+        return dummy;
+    }
+
+    const Bitboard& bbOf(PieceColor c, PieceType t) const {
+        if (c == PieceColor::White) {
+            switch (t) {
+                case PieceType::pawns:   return wPawns;
+                case PieceType::horse:   return wKnights;
+                case PieceType::bishops: return wBishops;
+                case PieceType::rooks:   return wRooks;
+                case PieceType::queen:   return wQueens;
+                case PieceType::king:    return wKing;
+                default: break;
+            }
+        } else if (c == PieceColor::Black) {
+            switch (t) {
+                case PieceType::pawns:   return bPawns;
+                case PieceType::horse:   return bKnights;
+                case PieceType::bishops: return bBishops;
+                case PieceType::rooks:   return bRooks;
+                case PieceType::queen:   return bQueens;
+                case PieceType::king:    return bKing;
+                default: break;
+            }
+        }
+        assert(false && "bbOf called with invalid piece type or color");
+        static const Bitboard dummy = 0;
         return dummy;
     }
 };
