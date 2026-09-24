@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <sstream>
@@ -55,8 +56,37 @@ bool handleUCICommand(const std::string &line, Board &board, std::vector<uint64_
         uciMode = true;
         std::cout << "id name BitboardChessEngine\n";
         std::cout << "id author ishtiaqsifat\n";
+        std::cout << "option name Move Overhead type spin default " << DEFAULT_MOVE_OVERHEAD_MS
+                  << " min 0 max 5000\n";
         std::cout << "uciok\n";
         std::cout.flush();
+        return true;
+    }
+
+    if (cmd == "setoption") {
+        // setoption name <name with spaces> value <v>
+        std::string token, name;
+        bool readingValue = false;
+        std::string value;
+        while (ss >> token) {
+            if (token == "name") continue;
+            if (token == "value") { readingValue = true; continue; }
+            if (readingValue) value = token;
+            else name += (name.empty() ? "" : " ") + token;
+        }
+        if (name == "Move Overhead" && !value.empty()) {
+            try {
+                long long v = std::stoll(value);
+                moveOverheadMs = std::max(0LL, std::min(5000LL, v));
+            } catch (const std::exception &) {
+                // ignore malformed value
+            }
+        }
+        return true;
+    }
+
+    if (cmd == "stop" || cmd == "ponderhit") {
+        // Search is synchronous, so there is never one in flight to interrupt.
         return true;
     }
 
@@ -127,38 +157,45 @@ bool handleUCICommand(const std::string &line, Board &board, std::vector<uint64_
     }
 
     if (cmd == "go") {
-        int depth = 4;
+        SearchLimits limits;
+        bool anyLimit = false;
         std::string sub;
         while (ss >> sub) {
+            long long v = 0;
             if (sub == "depth") {
-                ss >> depth;
+                if (ss >> v) { limits.maxDepth = static_cast<int>(v); anyLimit = true; }
             } else if (sub == "movetime") {
-                int ms;
-                if (ss >> ms) {
-                    // Fixed search time heuristic
-                    depth = (ms < 50) ? 3 : (ms < 300) ? 4 : 5;
-                }
-            } else if (sub == "wtime" || sub == "btime") {
-                int t;
-                if (ss >> t) {
-                    depth = (t < 5000) ? 4 : 5;
-                }
+                if (ss >> v) { limits.moveTimeMs = v; anyLimit = true; }
+            } else if (sub == "wtime") {
+                if (ss >> v) { limits.wtime = v; anyLimit = true; }
+            } else if (sub == "btime") {
+                if (ss >> v) { limits.btime = v; anyLimit = true; }
+            } else if (sub == "winc") {
+                if (ss >> v) limits.winc = v;
+            } else if (sub == "binc") {
+                if (ss >> v) limits.binc = v;
+            } else if (sub == "movestogo") {
+                if (ss >> v) limits.movesToGo = static_cast<int>(v);
+            } else if (sub == "infinite") {
+                limits.infinite = true;
+                anyLimit = true;
             }
         }
-        if (depth < 1) depth = 1;
-        if (depth > 6) depth = 6;
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-        int score = 0;
-        Move best = findBestMove(board, depth, score);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        // "go" with no usable limit: search a short fixed slice rather than forever.
+        if (!anyLimit) {
+            limits.moveTimeMs = 1000;
+        }
+        if (limits.maxDepth < 1) limits.maxDepth = 1;
 
-        std::cout << "info depth " << depth 
-                  << " score cp " << score 
-                  << " nodes " << searchNodes 
-                  << " time " << static_cast<int>(ms) << "\n";
-        std::cout << "bestmove " << moveToUCI(best) << "\n";
+        SearchResult r = searchPosition(board, limits);
+
+        int reportedDepth = (r.depth > 0) ? r.depth : 1;
+        std::cout << "info depth " << reportedDepth
+                  << " score cp " << r.score
+                  << " nodes " << searchNodes
+                  << " time " << r.elapsedMs << "\n";
+        std::cout << "bestmove " << moveToUCI(r.bestMove) << "\n";
         std::cout.flush();
         return true;
     }
