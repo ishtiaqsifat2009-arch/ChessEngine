@@ -1,0 +1,39 @@
+{
+  "date": "2026-08-21T13:48:29.321693-07:00",
+  "data": {
+    "CMAKE_CXX_STANDARD": {
+      "location": {
+        "uri": "file:///Users/ishtiaqsifat/Projects/ChessEngine/CMakeLists.txt",
+        "range": {
+          "start": {
+            "line": 4,
+            "character": 4
+          },
+          "end": {
+            "line": 4,
+            "character": 22
+          }
+        }
+      },
+      "document_info": "defined variable\nfrom: /Users/ishtiaqsifat/Projects/ChessEngine/CMakeLists.txt",
+      "is_function": false
+    },
+    "CMAKE_CXX_STANDARD_REQUIRED": {
+      "location": {
+        "uri": "file:///Users/ishtiaqsifat/Projects/ChessEngine/CMakeLists.txt",
+        "range": {
+          "start": {
+            "line": 5,
+            "character": 4
+          },
+          "end": {
+            "line": 5,
+            "character": 31
+          }
+        }
+      },
+      "document_info": "defined variable\nfrom: /Users/ishtiaqsifat/Projects/ChessEngine/CMakeLists.txt",
+      "is_function": false
+    }
+  }
+}

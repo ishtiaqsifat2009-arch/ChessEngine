@@ -2,6 +2,7 @@
 #define BOARD_HPP
 
 #include <cstdint>
+#include <string>
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 using Bitboard = uint64_t;
@@ -20,6 +21,36 @@ enum class PieceType {
 };
 
 enum class PieceColor { None, White, Black };
+
+// ─── Move Representation ──────────────────────────────────────────────────────
+struct Move {
+    int startX = 0, startY = 0;
+    int endX = 0, endY = 0;
+    PieceType promo = PieceType::none;
+
+    bool operator==(const Move &o) const {
+        return startX == o.startX && startY == o.startY &&
+               endX == o.endX && endY == o.endY &&
+               promo == o.promo;
+    }
+};
+
+// ─── Coordinate & UCI Notation Helpers ────────────────────────────────────────
+inline std::string sqToCoord(int x, int y) {
+    std::string s;
+    s += static_cast<char>('a' + x);
+    s += static_cast<char>('1' + y);
+    return s;
+}
+
+inline std::string moveToUCI(const Move &m) {
+    std::string s = sqToCoord(m.startX, m.startY) + sqToCoord(m.endX, m.endY);
+    if (m.promo == PieceType::queen)        s += 'q';
+    else if (m.promo == PieceType::rooks)   s += 'r';
+    else if (m.promo == PieceType::bishops) s += 'b';
+    else if (m.promo == PieceType::horse)   s += 'n';
+    return s;
+}
 
 // ─── Castling rights bitmask ──────────────────────────────────────────────────
 constexpr uint8_t CASTLE_WK = 0b0001; // White kingside
@@ -91,7 +122,6 @@ struct Board {
                 default: break;
             }
         }
-        // Should never reach here; return a dummy reference
         static Bitboard dummy = 0;
         return dummy;
     }
