@@ -1,6 +1,8 @@
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include "../include/movegen.hpp"
 
 // ─── Query & Path Helpers ─────────────────────────────────────────────────────
@@ -394,6 +396,74 @@ void setupStartPosition(Board &b) {
     b.currentTurn    = PieceColor::White;
     b.halfMoveClock  = 0;
     b.fullMoveNumber = 1;
+}
+
+bool loadFEN(Board &b, const std::string &fen) {
+    std::stringstream ss(fen);
+    std::string pieces, active, castling, ep;
+    int halfmove = 0, fullmove = 1;
+
+    if (!(ss >> pieces >> active >> castling >> ep)) {
+        return false;
+    }
+    ss >> halfmove >> fullmove;
+
+    Board nb{};
+
+    int rank = 7;
+    int file = 0;
+    for (char c : pieces) {
+        if (c == '/') {
+            rank--;
+            file = 0;
+            if (rank < 0) return false;
+        } else if (std::isdigit(c)) {
+            file += (c - '0');
+        } else {
+            if (file > 7) return false;
+            int s = sq(file, rank);
+            switch (c) {
+                case 'P': setBit(nb.wPawns, s); break;
+                case 'N': setBit(nb.wKnights, s); break;
+                case 'B': setBit(nb.wBishops, s); break;
+                case 'R': setBit(nb.wRooks, s); break;
+                case 'Q': setBit(nb.wQueens, s); break;
+                case 'K': setBit(nb.wKing, s); break;
+                case 'p': setBit(nb.bPawns, s); break;
+                case 'n': setBit(nb.bKnights, s); break;
+                case 'b': setBit(nb.bBishops, s); break;
+                case 'r': setBit(nb.bRooks, s); break;
+                case 'q': setBit(nb.bQueens, s); break;
+                case 'k': setBit(nb.bKing, s); break;
+                default: return false;
+            }
+            file++;
+        }
+    }
+
+    nb.currentTurn = (active == "b") ? PieceColor::Black : PieceColor::White;
+
+    nb.castlingRights = 0;
+    if (castling != "-") {
+        for (char c : castling) {
+            if (c == 'K') nb.castlingRights |= CASTLE_WK;
+            else if (c == 'Q') nb.castlingRights |= CASTLE_WQ;
+            else if (c == 'k') nb.castlingRights |= CASTLE_BK;
+            else if (c == 'q') nb.castlingRights |= CASTLE_BQ;
+        }
+    }
+
+    if (ep != "-" && ep.length() >= 2) {
+        nb.enPassantFile = ep[0] - 'a';
+    } else {
+        nb.enPassantFile = -1;
+    }
+
+    nb.halfMoveClock = halfmove;
+    nb.fullMoveNumber = fullmove;
+
+    b = nb;
+    return true;
 }
 
 // ─── Perft ────────────────────────────────────────────────────────────────────

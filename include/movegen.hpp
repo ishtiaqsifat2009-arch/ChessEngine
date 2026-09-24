@@ -32,6 +32,7 @@ void makeMove(Board &b, const Move &m);
 // ─── Move Generation & Verification ───────────────────────────────────────────
 void GenerateLegalMoves(const Board &b, std::vector<Move> &move_list);
 void setupStartPosition(Board &b);
+bool loadFEN(Board &b, const std::string &fen);
 void printBoard(const Board &b);
 unsigned long long Perft(Board b, int depth);
 

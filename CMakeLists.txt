@@ -12,6 +12,8 @@ add_executable(ChessEngine
     src/movegen.cpp
     src/eval.cpp
     src/search.cpp
+    src/zobrist.cpp
+    src/uci.cpp
 )
 
 target_link_libraries(ChessEngine)

@@ -13,7 +13,11 @@ A high-performance, cleanly architected chess engine written from scratch in C++
   * Pawn Promotion (with full underpromotion support: Queen, Rook, Bishop, Knight).
   * Check, Checkmate, and Stalemate detection.
   * 50-Move Rule (half-move clock resets on pawn moves or captures).
+  * Threefold Repetition (using 64-bit Zobrist position hashing).
   * Insufficient Material Detection (K vs K, K+N vs K, K+B vs K, K+B vs K+B same-color).
+* **Dual Interface (Interactive CLI + UCI Protocol)**:
+  * Standard **Universal Chess Interface (UCI)** protocol support (`uci`, `isready`, `ucinewgame`, `position`, `go`, `quit`) for plug-and-play compatibility with any custom web frontend, Electron GUI, or desktop interface (Arena, CuteChess).
+  * Human-friendly interactive terminal mode with algebraic notation and ASCII board rendering.
 * **Search Engine**:
   * **Negamax with Alpha-Beta Pruning**: Reduces exponential game-tree search by orders of magnitude.
   * **Quiescence Search**: Solves the horizon effect by continuing tactical capture exchanges until positions are quiet.
@@ -36,14 +40,18 @@ ChessEngine/
 ├── README.md              # Project documentation and benchmarks
 ├── include/
 │   ├── board.hpp          # Bitboard primitives, Board struct, Move struct, UCI helpers
-│   ├── movegen.hpp        # Move generation, validation, ray casting, and Perft declarations
+│   ├── movegen.hpp        # Move generation, validation, ray casting, FEN loader, Perft
 │   ├── eval.hpp           # Positional evaluation and insufficient material declarations
-│   └── search.hpp         # Negamax, Quiescence search, and move ordering declarations
+│   ├── search.hpp         # Negamax, Quiescence search, and move ordering declarations
+│   ├── uci.hpp            # Universal Chess Interface protocol definitions
+│   └── zobrist.hpp        # 64-bit Zobrist hashing keys and threefold repetition
 └── src/
     ├── main.cpp           # Interactive CLI, algebraic parser, and command dispatcher
-    ├── movegen.cpp        # Move validation, execution, and legal move generator
+    ├── movegen.cpp        # Move validation, execution, FEN parsing, and move generator
     ├── eval.cpp           # Static evaluation function and Piece-Square Tables (PST)
-    └── search.cpp         # Alpha-Beta search, Quiescence search, and root decision-making
+    ├── search.cpp         # Alpha-Beta search, Quiescence search, and root decision-making
+    ├── uci.cpp            # Universal Chess Interface protocol command loop
+    └── zobrist.cpp        # Deterministic 64-bit Zobrist hash table and repetition check
 ```
 
 ---

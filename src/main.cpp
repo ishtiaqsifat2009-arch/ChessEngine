@@ -5,11 +5,14 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include "../include/board.hpp"
 #include "../include/eval.hpp"
 #include "../include/movegen.hpp"
 #include "../include/search.hpp"
+#include "../include/uci.hpp"
+#include "../include/zobrist.hpp"
 
 // ─── Move Parsing & Game State ────────────────────────────────────────────────
 static bool parseAlgebraicMove(const std::string &str, const Board &b, Move &outMove) {
@@ -57,7 +60,7 @@ static bool parseAlgebraicMove(const std::string &str, const Board &b, Move &out
     return false;
 }
 
-static bool checkGameOver(const Board &b) {
+static bool checkGameOver(const Board &b, const std::vector<uint64_t> &history) {
     if (b.halfMoveClock >= 100) {
         std::cout << "\n============================================\n";
         std::cout << " DRAW! 50-move rule reached.\n";
@@ -68,6 +71,13 @@ static bool checkGameOver(const Board &b) {
     if (isInsufficientMaterial(b)) {
         std::cout << "\n============================================\n";
         std::cout << " DRAW! Insufficient material to checkmate.\n";
+        std::cout << "============================================\n";
+        return true;
+    }
+
+    if (isThreefoldRepetition(b, history)) {
+        std::cout << "\n============================================\n";
+        std::cout << " DRAW! Threefold repetition.\n";
         std::cout << "============================================\n";
         return true;
     }
@@ -106,30 +116,41 @@ static void printHelp() {
     std::cout << "  eval                 Show static position score\n";
     std::cout << "  perft <depth>        Run move-generation verification test\n";
     std::cout << "  new                  Reset board to starting position\n";
+    std::cout << "  uci                  Switch to standard UCI protocol mode\n";
     std::cout << "  help                 Display this command cheat sheet\n";
     std::cout << "  quit / exit          Exit the program\n\n";
 }
 
-// ─── Main Game Loop ───────────────────────────────────────────────────────────
+// ─── Main Game Loop (Supports both CLI and UCI Frontend) ──────────────────────
 int main() {
+    initZobrist();
+
     Board board;
     setupStartPosition(board);
+
+    std::vector<uint64_t> gameHistory;
+    gameHistory.push_back(computeZobristHash(board));
 
     PieceColor aiPlayer = PieceColor::Black; // Default: human is White, AI is Black
     bool vsAi = true;
     int searchDepth = 4;
+    bool isInteractive = (isatty(STDIN_FILENO) != 0);
+    bool uciMode = false;
+    bool running = true;
 
-    std::cout << "========================================================\n";
-    std::cout << "             Bitboard Chess Engine (C++17)              \n";
-    std::cout << "========================================================\n";
-    std::cout << "Type 'help' for commands, or enter moves like 'e2e4'.\n";
-    std::cout << "Current Mode: You play White vs AI Black (Depth " << searchDepth << ").\n";
+    // Display welcome banner initially only if running in an interactive terminal
+    if (isInteractive) {
+        std::cout << "========================================================\n";
+        std::cout << "             Bitboard Chess Engine (C++17)              \n";
+        std::cout << "========================================================\n";
+        std::cout << "Type 'help' for commands, or enter moves like 'e2e4'.\n";
+        std::cout << "Current Mode: You play White vs AI Black (Depth " << searchDepth << ").\n";
+        printBoard(board);
+    }
 
-    printBoard(board);
-
-    while (true) {
-        // If it's AI's turn in vsAi mode
-        if (vsAi && board.currentTurn == aiPlayer) {
+    while (running) {
+        // If playing vs AI in interactive mode and it's AI's turn
+        if (!uciMode && vsAi && board.currentTurn == aiPlayer) {
             std::cout << "AI (" << (aiPlayer == PieceColor::White ? "White" : "Black") 
                       << ") is thinking (depth " << searchDepth << ")...\n";
 
@@ -140,7 +161,7 @@ int main() {
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
             if (best.startX == 0 && best.startY == 0 && best.endX == 0 && best.endY == 0) {
-                checkGameOver(board);
+                checkGameOver(board, gameHistory);
                 break;
             }
 
@@ -151,22 +172,35 @@ int main() {
                       << " | time: " << static_cast<int>(ms) << " ms)\n";
 
             makeMove(board, best);
+            gameHistory.push_back(computeZobristHash(board));
             printBoard(board);
 
-            if (checkGameOver(board)) break;
+            if (checkGameOver(board, gameHistory)) break;
             continue;
         }
 
-        // Prompt human input
-        std::cout << (board.currentTurn == PieceColor::White ? "White" : "Black") << " > ";
+        // Prompt input
+        if (isInteractive && !uciMode) {
+            std::cout << (board.currentTurn == PieceColor::White ? "White" : "Black") << " > ";
+        }
         std::string line;
         if (!std::getline(std::cin, line)) break;
 
-        // Trim leading and trailing spaces
+        // Trim whitespace
         while (!line.empty() && std::isspace(line.front())) line.erase(line.begin());
         while (!line.empty() && std::isspace(line.back()))  line.pop_back();
         if (line.empty()) continue;
 
+        // First, check if this is a UCI command
+        if (handleUCICommand(line, board, gameHistory, uciMode, running)) {
+            if (!running) break;
+            continue;
+        }
+
+        // If in UCI mode, ignore unknown non-UCI text
+        if (uciMode) continue;
+
+        // Interactive CLI handling
         std::stringstream ss(line);
         std::string cmd;
         ss >> cmd;
@@ -183,6 +217,8 @@ int main() {
 
         if (cmd == "new") {
             setupStartPosition(board);
+            gameHistory.clear();
+            gameHistory.push_back(computeZobristHash(board));
             std::cout << "Board reset to starting position.\n";
             printBoard(board);
             continue;
@@ -240,8 +276,9 @@ int main() {
                       << " | time: " << static_cast<int>(ms) << " ms)\n";
 
             makeMove(board, best);
+            gameHistory.push_back(computeZobristHash(board));
             printBoard(board);
-            checkGameOver(board);
+            checkGameOver(board, gameHistory);
             continue;
         }
 
@@ -274,8 +311,9 @@ int main() {
         Move userMove;
         if (parseAlgebraicMove(cmd, board, userMove)) {
             makeMove(board, userMove);
+            gameHistory.push_back(computeZobristHash(board));
             printBoard(board);
-            if (checkGameOver(board)) break;
+            if (checkGameOver(board, gameHistory)) break;
             continue;
         }
 
@@ -290,8 +328,9 @@ int main() {
                     } else {
                         userMove = {sx, sy, ex, ey, PieceType::none};
                         makeMove(board, userMove);
+                        gameHistory.push_back(computeZobristHash(board));
                         printBoard(board);
-                        if (checkGameOver(board)) break;
+                        if (checkGameOver(board, gameHistory)) break;
                         continue;
                     }
                 } else {
