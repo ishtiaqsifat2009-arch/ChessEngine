@@ -22,6 +22,11 @@ A high-performance, cleanly architected chess engine written from scratch in C++
   * **Negamax with Alpha-Beta Pruning**: Reduces exponential game-tree search by orders of magnitude.
   * **Quiescence Search**: Solves the horizon effect by continuing tactical capture exchanges until positions are quiet.
   * **Move Ordering (MVV-LVA)**: Sorts high-value captures and promotions first to maximize early beta cutoffs.
+  * **Iterative Deepening with Time Management**: Searches depth 1, 2, 3, … keeping the best move of the last completed iteration, so a legal move is always available the instant the clock budget expires.
+* **Clock Safety**:
+  * Full `go` parsing (`wtime`, `btime`, `winc`, `binc`, `movestogo`, `movetime`, `depth`, `infinite`).
+  * Budget per move: `remaining / movestogo + 0.75 × increment`, hard-capped at a third of the remaining clock (three quarters on the final move of a period) and reduced by a configurable `Move Overhead` (default 30 ms) to absorb GUI/network lag.
+  * Hard abort: the clock is polled inside the search every 2048 nodes, so an over-long iteration is discarded rather than played out.
 * **Static Evaluation**:
   * Piece material valuation (Centipawns).
   * Piece-Square Tables (PST) rewarding piece activity, center control, pawn development, and king safety.

@@ -1,9 +1,73 @@
 #include <algorithm>
+#include <chrono>
 #include "../include/eval.hpp"
 #include "../include/movegen.hpp"
 #include "../include/search.hpp"
 
 uint64_t searchNodes = 0;
+long long moveOverheadMs = DEFAULT_MOVE_OVERHEAD_MS;
+
+// ─── Search Clock ─────────────────────────────────────────────────────────────
+namespace {
+
+using Clock = std::chrono::steady_clock;
+
+Clock::time_point searchStart;
+long long hardLimitMs = -1;   // -1 = unlimited
+bool      searchAborted = false;
+uint64_t  nextTimeCheck = 0;
+
+constexpr uint64_t TIME_CHECK_INTERVAL = 2048;
+
+long long elapsedMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - searchStart).count();
+}
+
+void startClock(long long limitMs) {
+    searchStart    = Clock::now();
+    hardLimitMs    = limitMs;
+    searchAborted  = false;
+    nextTimeCheck  = TIME_CHECK_INTERVAL;
+}
+
+// Polls the clock every TIME_CHECK_INTERVAL nodes so the check itself is cheap.
+bool outOfTime() {
+    if (searchAborted) return true;
+    if (hardLimitMs < 0) return false;
+    if (searchNodes < nextTimeCheck) return false;
+    nextTimeCheck = searchNodes + TIME_CHECK_INTERVAL;
+    if (elapsedMs() >= hardLimitMs) searchAborted = true;
+    return searchAborted;
+}
+
+} // namespace
+
+// ─── Time Allocation ──────────────────────────────────────────────────────────
+long long allocateTimeMs(const SearchLimits &limits, PieceColor sideToMove) {
+    if (limits.moveTimeMs >= 0) {
+        return std::max(1LL, limits.moveTimeMs - moveOverheadMs);
+    }
+
+    long long remaining = (sideToMove == PieceColor::White) ? limits.wtime : limits.btime;
+    long long increment = (sideToMove == PieceColor::White) ? limits.winc  : limits.binc;
+    if (remaining < 0) {
+        return -1; // no clock information supplied: no time limit
+    }
+
+    remaining = std::max(0LL, remaining - moveOverheadMs);
+    increment = std::max(0LL, increment);
+
+    int movesToGo = (limits.movesToGo > 0) ? limits.movesToGo : DEFAULT_MOVES_TO_GO;
+
+    // Spend an even slice of the remaining time plus most of the increment, but
+    // never risk more than a fraction of what is left on a single move.
+    long long budget  = remaining / movesToGo + (increment * 3) / 4;
+    long long maxSpend = remaining / 3;
+    if (limits.movesToGo == 1) maxSpend = (remaining * 3) / 4; // last move before a new period
+
+    budget = std::min(budget, maxSpend);
+    return std::max(1LL, budget);
+}
 
 // Move ordering: Search captures and promotions first for faster beta-cutoffs
 void orderMoves(const Board &b, std::vector<Move> &moves) {
@@ -33,6 +97,8 @@ void orderMoves(const Board &b, std::vector<Move> &moves) {
 // ─── Quiescence Search (Resolves tactical captures at horizon) ─────────────────
 int quiescence(Board b, int alpha, int beta) {
     searchNodes++;
+
+    if (outOfTime()) return 0;
 
     // 50-move rule or insufficient material check in quiescence
     if (b.halfMoveClock >= 100 || isInsufficientMaterial(b)) {
@@ -86,6 +152,8 @@ int quiescence(Board b, int alpha, int beta) {
 int negamax(Board b, int depth, int alpha, int beta) {
     searchNodes++;
 
+    if (outOfTime()) return 0;
+
     // 50-move rule or insufficient material draw
     if (b.halfMoveClock >= 100 || isInsufficientMaterial(b)) {
         return 0;
@@ -128,37 +196,97 @@ int negamax(Board b, int depth, int alpha, int beta) {
     return maxScore;
 }
 
-// ─── Root Search ──────────────────────────────────────────────────────────────
-Move findBestMove(const Board &b, int depth, int &bestScore) {
+// ─── Root Search (Iterative Deepening) ────────────────────────────────────────
+SearchResult searchPosition(const Board &b, const SearchLimits &limits) {
     searchNodes = 0;
+
+    SearchResult result;
+
     std::vector<Move> moveList;
     GenerateLegalMoves(b, moveList);
-
     if (moveList.empty()) {
-        bestScore = isKingInCheck(b, b.currentTurn) ? -CHECKMATE_SCORE : 0;
-        return Move{};
+        result.score = isKingInCheck(b, b.currentTurn) ? -CHECKMATE_SCORE : 0;
+        return result;
     }
 
     orderMoves(b, moveList);
+    result.bestMove = moveList[0];
 
-    Move bestMove = moveList[0];
-    int alpha = -INF;
-    int beta = INF;
-    bestScore = -INF;
+    long long budget = limits.infinite ? -1 : allocateTimeMs(limits, b.currentTurn);
+    startClock(budget);
 
-    for (const Move &move : moveList) {
-        Board child = b;
-        makeMove(child, move);
+    // Only start another iteration when a decent share of the budget is left,
+    // otherwise the deeper search is almost certain to be thrown away.
+    const long long startNextIterBefore = (budget < 0) ? -1 : (budget * 2) / 5;
 
-        int score = -negamax(child, depth - 1, -beta, -alpha);
+    int maxDepth = std::max(1, std::min(limits.maxDepth, MAX_SEARCH_DEPTH));
 
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = move;
+    for (int depth = 1; depth <= maxDepth; depth++) {
+        if (startNextIterBefore >= 0 && depth > 1 && elapsedMs() >= startNextIterBefore) break;
+
+        Move iterBest = moveList[0];
+        int  iterScore = -INF;
+        int  alpha = -INF;
+        bool completed = true;
+
+        for (const Move &move : moveList) {
+            Board child = b;
+            makeMove(child, move);
+
+            int score = -negamax(child, depth - 1, -INF, -alpha);
+
+            if (searchAborted) {
+                completed = false;
+                break;
+            }
+            if (score > iterScore) {
+                iterScore = score;
+                iterBest  = move;
+            }
+            if (score > alpha) {
+                alpha = score;
+            }
         }
-        if (score > alpha) {
-            alpha = score;
+
+        if (completed) {
+            result.bestMove = iterBest;
+            result.score    = iterScore;
+            result.depth    = depth;
+
+            // Search the previous best move first next iteration.
+            auto it = std::find(moveList.begin(), moveList.end(), iterBest);
+            if (it != moveList.end()) {
+                std::rotate(moveList.begin(), it, it + 1);
+            }
+
+            // A forced mate is found; searching deeper cannot improve on it.
+            if (iterScore >= CHECKMATE_SCORE) break;
+        } else {
+            // Partial iteration: keep it only if it already beat the previous
+            // depth's score, so an aborted search never returns a worse move.
+            if (result.depth > 0 && iterScore > result.score) {
+                result.bestMove = iterBest;
+                result.score    = iterScore;
+            } else if (result.depth == 0 && iterScore > -INF) {
+                result.bestMove = iterBest;
+                result.score    = iterScore;
+            }
+            break;
         }
     }
-    return bestMove;
+
+    result.elapsedMs = elapsedMs();
+    hardLimitMs = -1;
+    searchAborted = false;
+    return result;
+}
+
+Move findBestMove(const Board &b, int depth, int &bestScore) {
+    SearchLimits limits;
+    limits.maxDepth = depth;
+    limits.infinite = true; // fixed depth, no clock
+
+    SearchResult r = searchPosition(b, limits);
+    bestScore = r.score;
+    return r.bestMove;
 }
